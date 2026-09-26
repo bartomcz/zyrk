@@ -1,0 +1,24 @@
+:root {
+  font-family: sans-serif;
+  color: #171717;
+  background: #fafafa;
+}
+
+html,
+body,
+#root,
+main {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.konvajs-content {
+  cursor: grab;
+  touch-action: none;
+}
+
+.konvajs-content:active {
+  cursor: grabbing;
+}
