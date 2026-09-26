@@ -139,6 +139,22 @@ export default function App() {
     }
   }, [document.objects, editing, selectedObjectId]);
 
+  useEffect(() => {
+    const deleteSelectedObject = (event: KeyboardEvent) => {
+      if (event.key !== "Backspace" || editing || !selectedObjectId) return;
+
+      event.preventDefault();
+      dispatch({
+        type: "history/apply",
+        command: { type: "object/remove", ids: [selectedObjectId] },
+        occurredAt: now(),
+      });
+    };
+
+    window.addEventListener("keydown", deleteSelectedObject);
+    return () => window.removeEventListener("keydown", deleteSelectedObject);
+  }, [editing, selectedObjectId]);
+
   const applyCommand = (command: DocumentCommand, groupKey?: string) => {
     dispatch({
       type: "history/apply",
