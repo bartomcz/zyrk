@@ -1,36 +1,83 @@
-import { useEffect, useRef, useState } from "react";
-import type Konva from "konva";
-import { Group, Layer, Rect, Shape, Stage, Text } from "react-konva";
+import { useEffect, useReducer, useRef, useState } from "react";
 import "./App.css";
+import { CanvasStage, type CanvasView } from "./editor/canvas/CanvasStage";
+import { EditorOverlay } from "./editor/canvas/EditorOverlay";
+import { EditorToolbar } from "./editor/components/EditorToolbar";
+import { createCanvasDocument } from "./editor/model/document";
+import {
+  createObjectId,
+  type CanvasObject,
+  type ObjectId,
+} from "./editor/model/objects";
+import {
+  createCanvasObject,
+  getObjectDefinition,
+} from "./editor/objects/registry";
+import { browserDocumentFileRepository } from "./editor/persistence/documentRepository";
+import {
+  recoveryRepository,
+  type RecoverySnapshot,
+} from "./editor/persistence/recoveryRepository";
+import type { DocumentCommand } from "./editor/state/commands";
+import {
+  createDocumentHistory,
+  documentHistoryReducer,
+} from "./editor/state/history";
 
-const GRID_SIZE = 40;
-const MIN_SCALE = 0.2;
-const MAX_SCALE = 5;
-const TEXT_WIDTH = 240;
-const TEXT_HEIGHT = 44;
-const TEXT_FONT_SIZE = 28;
+type EditingSession = {
+  objectId: ObjectId;
+  historyGroupKey: string;
+};
 
-type View = { x: number; y: number; scale: number };
-type CanvasText = { id: number; text: string; x: number; y: number };
-type TextEditor = { id: number; value: string };
+function now(): string {
+  return new Date().toISOString();
+}
+
+function createStarterDocument() {
+  const text = createCanvasObject("text", {
+    id: createObjectId(),
+    center: { x: 0, y: 0 },
+    offset: 0,
+  });
+
+  return createCanvasDocument([{ ...text, text: "Hello world" }]);
+}
+
+function getInitialRecovery(): RecoverySnapshot | null {
+  return recoveryRepository.loadCached();
+}
 
 export default function App() {
+  const [initialRecovery] = useState(getInitialRecovery);
   const [size, setSize] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
   }));
-  const [view, setView] = useState<View>(() => ({
+  const [view, setView] = useState<CanvasView>(() => ({
     x: window.innerWidth / 2,
     y: window.innerHeight / 2,
     scale: 1,
   }));
-  const [texts, setTexts] = useState<CanvasText[]>([
-    { id: 1, text: "Hello world", x: -TEXT_WIDTH / 2, y: -TEXT_HEIGHT / 2 },
-  ]);
-  const [selectedTextId, setSelectedTextId] = useState<number | null>(null);
-  const [editor, setEditor] = useState<TextEditor | null>(null);
-  const nextTextId = useRef(2);
-  const editorInput = useRef<HTMLInputElement>(null);
+  const [history, dispatch] = useReducer(
+    documentHistoryReducer,
+    initialRecovery?.document ?? createStarterDocument(),
+    createDocumentHistory,
+  );
+  const [lastExplicitlySavedRevision, setLastExplicitlySavedRevision] =
+    useState<number | null>(
+      initialRecovery?.lastExplicitlySavedRevision ?? null,
+    );
+  const [selectedObjectId, setSelectedObjectId] = useState<ObjectId | null>(
+    null,
+  );
+  const [editing, setEditing] = useState<EditingSession | null>(null);
+  const [recoveryHydrated, setRecoveryHydrated] = useState(false);
+  const latestRecovery = useRef<RecoverySnapshot | null>(null);
+
+  const document = history.present;
+  const editedObject = editing
+    ? document.objects[editing.objectId]
+    : undefined;
 
   useEffect(() => {
     const resize = () =>
@@ -41,254 +88,211 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!editor) return;
+    let cancelled = false;
 
-    editorInput.current?.focus();
-    editorInput.current?.select();
-  }, [editor?.id]);
+    void recoveryRepository.load().then((snapshot) => {
+      if (cancelled) return;
+      if (snapshot && snapshot.savedAt !== initialRecovery?.savedAt) {
+        dispatch({ type: "history/replace", document: snapshot.document });
+        setLastExplicitlySavedRevision(
+          snapshot.lastExplicitlySavedRevision,
+        );
+      }
+      setRecoveryHydrated(true);
+    });
 
-  const zoom = (event: Konva.KonvaEventObject<WheelEvent>) => {
-    event.evt.preventDefault();
-    const stage = event.target.getStage();
-    const pointer = stage?.getPointerPosition();
-    if (!stage || !pointer) return;
+    return () => {
+      cancelled = true;
+    };
+  }, [initialRecovery?.savedAt]);
 
-    const scale = Math.min(
-      MAX_SCALE,
-      Math.max(MIN_SCALE, stage.scaleX() * Math.exp(-event.evt.deltaY * 0.001)),
-    );
-    const point = {
-      x: (pointer.x - stage.x()) / stage.scaleX(),
-      y: (pointer.y - stage.y()) / stage.scaleY(),
+  useEffect(() => {
+    if (!recoveryHydrated) return;
+
+    const snapshot: RecoverySnapshot = {
+      formatVersion: 1,
+      savedAt: now(),
+      lastExplicitlySavedRevision,
+      document,
+    };
+    latestRecovery.current = snapshot;
+    void recoveryRepository.save(snapshot);
+  }, [document, lastExplicitlySavedRevision, recoveryHydrated]);
+
+  useEffect(() => {
+    const flushRecovery = () => {
+      if (latestRecovery.current) {
+        void recoveryRepository.save(latestRecovery.current);
+      }
     };
 
-    setView({
-      x: pointer.x - point.x * scale,
-      y: pointer.y - point.y * scale,
-      scale,
+    window.addEventListener("pagehide", flushRecovery);
+    return () => window.removeEventListener("pagehide", flushRecovery);
+  }, []);
+
+  useEffect(() => {
+    if (selectedObjectId && !document.objects[selectedObjectId]) {
+      setSelectedObjectId(null);
+    }
+    if (editing && !document.objects[editing.objectId]) {
+      setEditing(null);
+    }
+  }, [document.objects, editing, selectedObjectId]);
+
+  const applyCommand = (command: DocumentCommand, groupKey?: string) => {
+    dispatch({
+      type: "history/apply",
+      command,
+      occurredAt: now(),
+      groupKey,
     });
   };
 
   const addText = () => {
-    const id = nextTextId.current++;
-    const stagger = ((texts.length - 1) % 6) * 12;
+    const offset = ((document.order.length - 1) % 6) * 12;
     const center = {
       x: (size.width / 2 - view.x) / view.scale,
       y: (size.height / 2 - view.y) / view.scale,
     };
+    const object = createCanvasObject("text", {
+      id: createObjectId(),
+      center,
+      offset,
+    });
 
-    setTexts((current) => [
-      ...current,
-      {
-        id,
-        text: "Text",
-        x: center.x - TEXT_WIDTH / 2 + stagger,
-        y: center.y - TEXT_HEIGHT / 2 + stagger,
-      },
-    ]);
-    setSelectedTextId(id);
+    applyCommand({ type: "object/add", object });
+    setSelectedObjectId(object.id);
   };
 
-  const beginEditing = (item: CanvasText) => {
-    setSelectedTextId(item.id);
-    setEditor({ id: item.id, value: item.text });
+  const updateObject = (object: CanvasObject) => {
+    applyCommand({ type: "object/update", object });
+  };
+
+  const beginEditing = (objectId: ObjectId) => {
+    const object = document.objects[objectId];
+    if (!object || !getObjectDefinition(object).textEditor) return;
+
+    setSelectedObjectId(objectId);
+    setEditing({
+      objectId,
+      historyGroupKey: `text-edit:${objectId}:${createObjectId()}`,
+    });
+  };
+
+  const updateEditedText = (value: string) => {
+    if (!editing) return;
+    const object = document.objects[editing.objectId];
+    if (!object) return;
+    const textEditor = getObjectDefinition(object).textEditor;
+    if (!textEditor) return;
+
+    applyCommand(
+      {
+        type: "object/update",
+        object: textEditor.withValue(object, value),
+      },
+      editing.historyGroupKey,
+    );
   };
 
   const finishEditing = () => {
-    if (!editor) return;
+    if (!editing) return;
+    const object = document.objects[editing.objectId];
+    if (object) {
+      const textEditor = getObjectDefinition(object).textEditor;
+      if (textEditor) {
+        const value =
+          textEditor.getValue(object).trim() || textEditor.emptyValue;
+        applyCommand(
+          {
+            type: "object/update",
+            object: textEditor.withValue(object, value),
+          },
+          editing.historyGroupKey,
+        );
+      }
+    }
 
-    const nextValue = editor.value.trim() || "Text";
-    setTexts((current) =>
-      current.map((item) =>
-        item.id === editor.id ? { ...item, text: nextValue } : item,
-      ),
-    );
-    setEditor(null);
+    dispatch({
+      type: "history/end-group",
+      groupKey: editing.historyGroupKey,
+    });
+    setEditing(null);
   };
 
-  const cancelEditing = () => setEditor(null);
-
-  const updateTextPosition = (id: number, x: number, y: number) => {
-    setTexts((current) =>
-      current.map((item) => (item.id === id ? { ...item, x, y } : item)),
-    );
+  const cancelEditing = () => {
+    if (!editing) return;
+    dispatch({
+      type: "history/cancel-group",
+      groupKey: editing.historyGroupKey,
+      occurredAt: now(),
+    });
+    setEditing(null);
   };
 
-  const setCanvasCursor = (
-    event: Konva.KonvaEventObject<MouseEvent>,
-    cursor: string,
-  ) => {
-    const stage = event.target.getStage();
-    if (stage) stage.container().style.cursor = cursor;
+  const openDocument = async () => {
+    try {
+      const openedDocument = await browserDocumentFileRepository.open();
+      if (!openedDocument) return;
+
+      dispatch({ type: "history/replace", document: openedDocument });
+      setLastExplicitlySavedRevision(openedDocument.revision);
+      setSelectedObjectId(null);
+      setEditing(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      window.alert(`Could not open the document: ${message}`);
+    }
   };
 
-  const left = -view.x / view.scale;
-  const top = -view.y / view.scale;
-  const right = left + size.width / view.scale;
-  const bottom = top + size.height / view.scale;
-  const editedText = editor
-    ? texts.find((item) => item.id === editor.id)
-    : undefined;
+  const saveDocument = async () => {
+    try {
+      await browserDocumentFileRepository.saveAs(document);
+      setLastExplicitlySavedRevision(document.revision);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      window.alert(`Could not save the document: ${message}`);
+    }
+  };
+
+  if (!recoveryHydrated) {
+    return <main aria-label="Loading canvas" aria-busy="true" />;
+  }
 
   return (
     <main aria-label="Zoomable canvas">
-      <Stage
-        width={size.width}
-        height={size.height}
-        x={view.x}
-        y={view.y}
-        scaleX={view.scale}
-        scaleY={view.scale}
-        draggable
-        onDragMove={(event) => {
-          if (event.target !== event.currentTarget) return;
+      <CanvasStage
+        size={size}
+        view={view}
+        document={document}
+        selectedObjectId={selectedObjectId}
+        editingObjectId={editing?.objectId ?? null}
+        onViewChange={setView}
+        onSelectObject={setSelectedObjectId}
+        onBeginEditing={beginEditing}
+        onChangeObject={updateObject}
+      />
 
-          setView((current) => ({
-            ...current,
-            x: event.target.x(),
-            y: event.target.y(),
-          }));
-        }}
-        onWheel={zoom}
-        onClick={(event) => {
-          if (event.target === event.currentTarget) setSelectedTextId(null);
-        }}
-        onTap={(event) => {
-          if (event.target === event.currentTarget) setSelectedTextId(null);
-        }}
-      >
-        <Layer>
-          <Shape
-            listening={false}
-            stroke="#d9dde3"
-            strokeWidth={1}
-            strokeScaleEnabled={false}
-            sceneFunc={(context, shape) => {
-              context.beginPath();
-              for (
-                let x = Math.floor(left / GRID_SIZE) * GRID_SIZE;
-                x <= right;
-                x += GRID_SIZE
-              ) {
-                context.moveTo(x, top);
-                context.lineTo(x, bottom);
-              }
-              for (
-                let y = Math.floor(top / GRID_SIZE) * GRID_SIZE;
-                y <= bottom;
-                y += GRID_SIZE
-              ) {
-                context.moveTo(left, y);
-                context.lineTo(right, y);
-              }
-              context.strokeShape(shape);
-            }}
-          />
-
-          {texts.map((item) => (
-            <Group
-              key={item.id}
-              x={item.x}
-              y={item.y}
-              draggable={
-                selectedTextId === item.id && editor?.id !== item.id
-              }
-              onClick={(event) => {
-                setSelectedTextId(item.id);
-                setCanvasCursor(event, "move");
-              }}
-              onTap={() => setSelectedTextId(item.id)}
-              onDblClick={() => beginEditing(item)}
-              onDblTap={() => beginEditing(item)}
-              onDragStart={(event) => {
-                setSelectedTextId(item.id);
-                setCanvasCursor(event, "grabbing");
-              }}
-              onDragEnd={(event) => {
-                updateTextPosition(item.id, event.target.x(), event.target.y());
-                setCanvasCursor(event, "move");
-              }}
-              onMouseEnter={(event) =>
-                setCanvasCursor(
-                  event,
-                  selectedTextId === item.id ? "move" : "grab",
-                )
-              }
-              onMouseLeave={(event) => setCanvasCursor(event, "grab")}
-            >
-              {selectedTextId === item.id && (
-                <Rect
-                  x={-4}
-                  y={-4}
-                  width={TEXT_WIDTH + 8}
-                  height={TEXT_HEIGHT + 8}
-                  fill="rgba(79, 70, 229, 0.06)"
-                  stroke="#4f46e5"
-                  strokeWidth={1.5}
-                  strokeScaleEnabled={false}
-                  cornerRadius={6}
-                  listening={false}
-                />
-              )}
-              <Text
-                text={item.text}
-                width={TEXT_WIDTH}
-                height={TEXT_HEIGHT}
-                align="center"
-                verticalAlign="middle"
-                fontSize={TEXT_FONT_SIZE}
-                fontFamily="sans-serif"
-                fill="#171717"
-                visible={editor?.id !== item.id}
-              />
-            </Group>
-          ))}
-        </Layer>
-      </Stage>
-
-      {editor && editedText && (
-        <input
-          ref={editorInput}
-          className="canvas-text-editor"
-          aria-label="Edit canvas text"
-          value={editor.value}
-          style={{
-            left: view.x + editedText.x * view.scale,
-            top: view.y + editedText.y * view.scale,
-            transform: `scale(${view.scale})`,
-          }}
-          onChange={(event) =>
-            setEditor((current) =>
-              current ? { ...current, value: event.target.value } : current,
-            )
-          }
-          onBlur={finishEditing}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") finishEditing();
-            if (event.key === "Escape") cancelEditing();
-          }}
+      {editedObject && (
+        <EditorOverlay
+          object={editedObject}
+          view={view}
+          onChange={updateEditedText}
+          onFinish={finishEditing}
+          onCancel={cancelEditing}
         />
       )}
 
-      <aside className="tool-panel" aria-label="Canvas tools">
-        <button
-          className="tool-button"
-          type="button"
-          aria-label="Add text"
-          title="Add text"
-          onClick={addText}
-        >
-          <svg
-            aria-hidden="true"
-            viewBox="0 0 24 24"
-            width="22"
-            height="22"
-            fill="none"
-          >
-            <path d="M5 5h14M12 5v14M8.5 19h7" />
-          </svg>
-        </button>
-      </aside>
+      <EditorToolbar
+        canUndo={history.past.length > 0}
+        canRedo={history.future.length > 0}
+        isDirty={lastExplicitlySavedRevision !== document.revision}
+        onAddText={addText}
+        onUndo={() => dispatch({ type: "history/undo", occurredAt: now() })}
+        onRedo={() => dispatch({ type: "history/redo", occurredAt: now() })}
+        onOpen={() => void openDocument()}
+        onSave={() => void saveDocument()}
+      />
     </main>
   );
 }
