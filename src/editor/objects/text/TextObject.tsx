@@ -49,7 +49,11 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
     minHeight: 24,
     canResize: true,
     canRotate: true,
-    withFrame: (object, frame) => ({ ...object, ...frame }),
+    withFrame: (object, frame) => ({
+      ...object,
+      ...frame,
+      fontSize: object.fontSize * (frame.width / object.width),
+    }),
   },
   textEditor: {
     multiline: false,
