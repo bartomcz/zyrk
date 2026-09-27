@@ -37,6 +37,8 @@ export function CanvasObjectNode({
   const Renderer = definition.Renderer;
   const objectRef = useRef<Konva.Group>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
+  const horizontalResizeRef = useRef(false);
+  const resizedWidthRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     if (selected && !editing && objectRef.current && transformerRef.current) {
@@ -83,12 +85,36 @@ export function CanvasObjectNode({
           });
           setCanvasCursor(event, "move");
         }}
-        onTransformEnd={(event) => {
-          const node = event.target;
+        onTransformStart={() => {
+          const anchor = transformerRef.current?.getActiveAnchor();
+          horizontalResizeRef.current =
+            anchor === "middle-left" || anchor === "middle-right";
+          resizedWidthRef.current = null;
+        }}
+        onTransform={() => {
+          if (!horizontalResizeRef.current) return;
+
+          const node = objectRef.current;
+          const text = node?.findOne<Konva.Text>("Text");
+          if (!node || !text) return;
+
           const width = Math.max(
             definition.transform.minWidth,
-            object.width * Math.abs(node.scaleX()),
+            text.width() * Math.abs(node.scaleX()),
           );
+          text.width(width);
+          node.scaleX(1);
+          resizedWidthRef.current = width;
+          transformerRef.current?.forceUpdate();
+        }}
+        onTransformEnd={(event) => {
+          const node = event.target;
+          const width = horizontalResizeRef.current
+            ? (resizedWidthRef.current ?? object.width)
+            : Math.max(
+                definition.transform.minWidth,
+                object.width * Math.abs(node.scaleX()),
+              );
           const height = Math.max(
             definition.transform.minHeight,
             object.height * Math.abs(node.scaleY()),
@@ -96,6 +122,8 @@ export function CanvasObjectNode({
 
           node.scaleX(1);
           node.scaleY(1);
+          horizontalResizeRef.current = false;
+          resizedWidthRef.current = null;
           updateFrame({
             x: node.x(),
             y: node.y(),
@@ -122,6 +150,8 @@ export function CanvasObjectNode({
             "top-right",
             "bottom-left",
             "bottom-right",
+            "middle-left",
+            "middle-right",
           ]}
           flipEnabled={false}
           keepRatio={true}

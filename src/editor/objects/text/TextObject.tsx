@@ -52,7 +52,7 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
     withFrame: (object, frame) => ({
       ...object,
       ...frame,
-      fontSize: object.fontSize * (frame.width / object.width),
+      fontSize: object.fontSize * (frame.height / object.height),
     }),
   },
   textEditor: {
