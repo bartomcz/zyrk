@@ -1,9 +1,8 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import { CanvasStage, type CanvasView } from "./editor/canvas/CanvasStage";
 import { EditorOverlay } from "./editor/canvas/EditorOverlay";
 import { EditorToolbar } from "./editor/components/EditorToolbar";
-import { createCanvasDocument } from "./editor/model/document";
 import {
   createObjectId,
   type CanvasObject,
@@ -13,32 +12,14 @@ import {
   createCanvasObject,
   getObjectDefinition,
 } from "./editor/objects/registry";
-import { documentFileRepository } from "./editor/persistence/documentRepository";
-import {
-  recoveryRepository,
-  type RecoverySnapshot,
-} from "./editor/persistence/recoveryRepository";
-import type { DocumentCommand } from "./editor/state/commands";
-import {
-  createDocumentHistory,
-  documentHistoryReducer,
-} from "./editor/state/history";
+import { useDocumentSession } from "./editor/state/useDocumentSession";
 
 type EditingSession = {
   objectId: ObjectId;
   historyGroupKey: string;
 };
 
-function now(): string {
-  return new Date().toISOString();
-}
-
-function getInitialRecovery(): RecoverySnapshot | null {
-  return recoveryRepository.loadCached();
-}
-
 export default function App() {
-  const [initialRecovery] = useState(getInitialRecovery);
   const [size, setSize] = useState(() => ({
     width: window.innerWidth,
     height: window.innerHeight,
@@ -48,29 +29,26 @@ export default function App() {
     y: window.innerHeight / 2,
     scale: 1,
   }));
-  const [history, dispatch] = useReducer(
-    documentHistoryReducer,
-    initialRecovery?.document ?? createCanvasDocument(),
-    createDocumentHistory,
-  );
-  const [lastExplicitlySavedRevision, setLastExplicitlySavedRevision] =
-    useState<number | null>(
-      initialRecovery
-        ? initialRecovery.lastExplicitlySavedRevision
-        : 0,
-    );
-  const [documentPath, setDocumentPath] = useState<string | null>(
-    initialRecovery?.documentPath ?? null,
-  );
+  const {
+    document,
+    isDirty,
+    recoveryHydrated,
+    canUndo,
+    canRedo,
+    applyCommand,
+    endCommandGroup,
+    cancelCommandGroup,
+    undo,
+    redo,
+    newDocument: replaceWithNewDocument,
+    openDocument: openDocumentFile,
+    saveDocument: saveDocumentFile,
+  } = useDocumentSession();
   const [selectedObjectId, setSelectedObjectId] = useState<ObjectId | null>(
     null,
   );
   const [editing, setEditing] = useState<EditingSession | null>(null);
-  const [recoveryHydrated, setRecoveryHydrated] = useState(false);
-  const latestRecovery = useRef<RecoverySnapshot | null>(null);
 
-  const document = history.present;
-  const isDirty = lastExplicitlySavedRevision !== document.revision;
   const editedObject = editing
     ? document.objects[editing.objectId]
     : undefined;
@@ -81,51 +59,6 @@ export default function App() {
 
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    void recoveryRepository.load().then((snapshot) => {
-      if (cancelled) return;
-      if (snapshot && snapshot.savedAt !== initialRecovery?.savedAt) {
-        dispatch({ type: "history/replace", document: snapshot.document });
-        setLastExplicitlySavedRevision(
-          snapshot.lastExplicitlySavedRevision,
-        );
-        setDocumentPath(snapshot.documentPath);
-      }
-      setRecoveryHydrated(true);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [initialRecovery?.savedAt]);
-
-  useEffect(() => {
-    if (!recoveryHydrated) return;
-
-    const snapshot: RecoverySnapshot = {
-      formatVersion: 1,
-      savedAt: now(),
-      lastExplicitlySavedRevision,
-      documentPath,
-      document,
-    };
-    latestRecovery.current = snapshot;
-    void recoveryRepository.save(snapshot);
-  }, [document, documentPath, lastExplicitlySavedRevision, recoveryHydrated]);
-
-  useEffect(() => {
-    const flushRecovery = () => {
-      if (latestRecovery.current) {
-        void recoveryRepository.save(latestRecovery.current);
-      }
-    };
-
-    window.addEventListener("pagehide", flushRecovery);
-    return () => window.removeEventListener("pagehide", flushRecovery);
   }, []);
 
   useEffect(() => {
@@ -142,25 +75,12 @@ export default function App() {
       if (event.key !== "Backspace" || editing || !selectedObjectId) return;
 
       event.preventDefault();
-      dispatch({
-        type: "history/apply",
-        command: { type: "object/remove", ids: [selectedObjectId] },
-        occurredAt: now(),
-      });
+      applyCommand({ type: "object/remove", ids: [selectedObjectId] });
     };
 
     window.addEventListener("keydown", deleteSelectedObject);
     return () => window.removeEventListener("keydown", deleteSelectedObject);
-  }, [editing, selectedObjectId]);
-
-  const applyCommand = (command: DocumentCommand, groupKey?: string) => {
-    dispatch({
-      type: "history/apply",
-      command,
-      occurredAt: now(),
-      groupKey,
-    });
-  };
+  }, [applyCommand, editing, selectedObjectId]);
 
   const newDocument = () => {
     if (
@@ -170,10 +90,7 @@ export default function App() {
       return;
     }
 
-    const blankDocument = createCanvasDocument();
-    dispatch({ type: "history/replace", document: blankDocument });
-    setLastExplicitlySavedRevision(blankDocument.revision);
-    setDocumentPath(null);
+    replaceWithNewDocument();
     setSelectedObjectId(null);
     setEditing(null);
     setView({ x: size.width / 2, y: size.height / 2, scale: 1 });
@@ -244,31 +161,20 @@ export default function App() {
       }
     }
 
-    dispatch({
-      type: "history/end-group",
-      groupKey: editing.historyGroupKey,
-    });
+    endCommandGroup(editing.historyGroupKey);
     setEditing(null);
   };
 
   const cancelEditing = () => {
     if (!editing) return;
-    dispatch({
-      type: "history/cancel-group",
-      groupKey: editing.historyGroupKey,
-      occurredAt: now(),
-    });
+    cancelCommandGroup(editing.historyGroupKey);
     setEditing(null);
   };
 
   const openDocument = async () => {
     try {
-      const opened = await documentFileRepository.open();
-      if (!opened) return;
+      if (!(await openDocumentFile())) return;
 
-      dispatch({ type: "history/replace", document: opened.document });
-      setLastExplicitlySavedRevision(opened.document.revision);
-      setDocumentPath(opened.path);
       setSelectedObjectId(null);
       setEditing(null);
     } catch (error) {
@@ -279,14 +185,7 @@ export default function App() {
 
   const saveDocument = async (saveAs = false) => {
     try {
-      const result = await documentFileRepository.save(
-        document,
-        saveAs ? null : documentPath,
-      );
-      if (!result.saved) return;
-
-      setDocumentPath(result.path);
-      setLastExplicitlySavedRevision(document.revision);
+      await saveDocumentFile(saveAs);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       window.alert(`Could not save the document: ${message}`);
@@ -322,13 +221,13 @@ export default function App() {
       )}
 
       <EditorToolbar
-        canUndo={history.past.length > 0}
-        canRedo={history.future.length > 0}
+        canUndo={canUndo}
+        canRedo={canRedo}
         isDirty={isDirty}
         onNew={newDocument}
         onAddText={addText}
-        onUndo={() => dispatch({ type: "history/undo", occurredAt: now() })}
-        onRedo={() => dispatch({ type: "history/redo", occurredAt: now() })}
+        onUndo={undo}
+        onRedo={redo}
         onOpen={() => void openDocument()}
         onSave={() => void saveDocument()}
         onSaveAs={() => void saveDocument(true)}
