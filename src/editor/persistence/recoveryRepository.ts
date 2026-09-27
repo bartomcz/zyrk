@@ -8,6 +8,7 @@ export type RecoverySnapshot = {
   formatVersion: 1;
   savedAt: string;
   lastExplicitlySavedRevision: number | null;
+  documentPath: string | null;
   document: CanvasDocument;
 };
 
@@ -39,11 +40,19 @@ function parseRecoverySnapshot(value: unknown): RecoverySnapshot {
   ) {
     throw new Error("Invalid saved revision in recovery snapshot");
   }
+  if (
+    candidate.documentPath !== undefined &&
+    candidate.documentPath !== null &&
+    typeof candidate.documentPath !== "string"
+  ) {
+    throw new Error("Invalid document path in recovery snapshot");
+  }
 
   return {
     formatVersion: 1,
     savedAt: candidate.savedAt,
     lastExplicitlySavedRevision: candidate.lastExplicitlySavedRevision,
+    documentPath: candidate.documentPath ?? null,
     document: parseCanvasDocumentValue(candidate.document),
   };
 }

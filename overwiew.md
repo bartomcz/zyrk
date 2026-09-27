@@ -111,9 +111,10 @@ ordering, and incomplete object maps are rejected. Migration routing is
 centralized beside this validation for future schema versions.
 
 `persistence/documentRepository.ts` exposes a repository rather than coupling
-file operations to React. Its current browser adapter opens a selected JSON
-file and downloads `<title>.zyrk.json`. A native dialog implementation can be
-substituted without changing the editor or document model.
+file operations to React. In Tauri, native dialogs open documents and choose a
+destination for Save As. Save writes to the current document path, falling back
+to Save As when no path is known. Browser development uses file input and
+download fallbacks because browsers cannot overwrite local files by path.
 
 ## Crash recovery
 
@@ -127,16 +128,17 @@ older slot, leaving the other slot available if a process or machine failure
 interrupts a write. At startup the frontend validates all available copies
 and restores the newest valid snapshot.
 
-Recovery stores the current document and the last explicitly saved revision,
-not the in-memory undo stack. Rapid changes are serialized and coalesced so an
-older asynchronous write cannot overwrite newer work.
+Recovery stores the current document, its current file path, and the last
+explicitly saved revision, not the in-memory undo stack. The path is recovery
+metadata and is never included in exported document JSON. Rapid changes are
+serialized and coalesced so an older asynchronous write cannot overwrite newer
+work.
 
 ## Frontend/native boundary
 
-The frontend imports `@tauri-apps/api` only in the recovery repository. In a
-normal browser, that repository uses WebView storage alone. In Tauri it invokes
-three narrowly scoped Rust commands to load, save, and clear recovery files.
-No arbitrary frontend filesystem paths are accepted by those commands.
+The persistence repositories use `@tauri-apps/api` only to invoke narrowly
+scoped document and recovery commands. In a normal browser they use WebView
+storage, file input, and downloads instead.
 
 Explicit document files remain independent of recovery files: saving a user
 document updates the saved revision, while the recovery copy continues to

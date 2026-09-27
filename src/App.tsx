@@ -13,7 +13,7 @@ import {
   createCanvasObject,
   getObjectDefinition,
 } from "./editor/objects/registry";
-import { browserDocumentFileRepository } from "./editor/persistence/documentRepository";
+import { documentFileRepository } from "./editor/persistence/documentRepository";
 import {
   recoveryRepository,
   type RecoverySnapshot,
@@ -33,16 +33,6 @@ function now(): string {
   return new Date().toISOString();
 }
 
-function createStarterDocument() {
-  const text = createCanvasObject("text", {
-    id: createObjectId(),
-    center: { x: 0, y: 0 },
-    offset: 0,
-  });
-
-  return createCanvasDocument([{ ...text, text: "Hello world" }]);
-}
-
 function getInitialRecovery(): RecoverySnapshot | null {
   return recoveryRepository.loadCached();
 }
@@ -60,13 +50,18 @@ export default function App() {
   }));
   const [history, dispatch] = useReducer(
     documentHistoryReducer,
-    initialRecovery?.document ?? createStarterDocument(),
+    initialRecovery?.document ?? createCanvasDocument(),
     createDocumentHistory,
   );
   const [lastExplicitlySavedRevision, setLastExplicitlySavedRevision] =
     useState<number | null>(
-      initialRecovery?.lastExplicitlySavedRevision ?? null,
+      initialRecovery
+        ? initialRecovery.lastExplicitlySavedRevision
+        : 0,
     );
+  const [documentPath, setDocumentPath] = useState<string | null>(
+    initialRecovery?.documentPath ?? null,
+  );
   const [selectedObjectId, setSelectedObjectId] = useState<ObjectId | null>(
     null,
   );
@@ -75,6 +70,7 @@ export default function App() {
   const latestRecovery = useRef<RecoverySnapshot | null>(null);
 
   const document = history.present;
+  const isDirty = lastExplicitlySavedRevision !== document.revision;
   const editedObject = editing
     ? document.objects[editing.objectId]
     : undefined;
@@ -97,6 +93,7 @@ export default function App() {
         setLastExplicitlySavedRevision(
           snapshot.lastExplicitlySavedRevision,
         );
+        setDocumentPath(snapshot.documentPath);
       }
       setRecoveryHydrated(true);
     });
@@ -113,11 +110,12 @@ export default function App() {
       formatVersion: 1,
       savedAt: now(),
       lastExplicitlySavedRevision,
+      documentPath,
       document,
     };
     latestRecovery.current = snapshot;
     void recoveryRepository.save(snapshot);
-  }, [document, lastExplicitlySavedRevision, recoveryHydrated]);
+  }, [document, documentPath, lastExplicitlySavedRevision, recoveryHydrated]);
 
   useEffect(() => {
     const flushRecovery = () => {
@@ -162,6 +160,23 @@ export default function App() {
       occurredAt: now(),
       groupKey,
     });
+  };
+
+  const newDocument = () => {
+    if (
+      isDirty &&
+      !window.confirm("Discard unsaved changes and create a new document?")
+    ) {
+      return;
+    }
+
+    const blankDocument = createCanvasDocument();
+    dispatch({ type: "history/replace", document: blankDocument });
+    setLastExplicitlySavedRevision(blankDocument.revision);
+    setDocumentPath(null);
+    setSelectedObjectId(null);
+    setEditing(null);
+    setView({ x: size.width / 2, y: size.height / 2, scale: 1 });
   };
 
   const addText = () => {
@@ -248,11 +263,12 @@ export default function App() {
 
   const openDocument = async () => {
     try {
-      const openedDocument = await browserDocumentFileRepository.open();
-      if (!openedDocument) return;
+      const opened = await documentFileRepository.open();
+      if (!opened) return;
 
-      dispatch({ type: "history/replace", document: openedDocument });
-      setLastExplicitlySavedRevision(openedDocument.revision);
+      dispatch({ type: "history/replace", document: opened.document });
+      setLastExplicitlySavedRevision(opened.document.revision);
+      setDocumentPath(opened.path);
       setSelectedObjectId(null);
       setEditing(null);
     } catch (error) {
@@ -261,9 +277,15 @@ export default function App() {
     }
   };
 
-  const saveDocument = async () => {
+  const saveDocument = async (saveAs = false) => {
     try {
-      await browserDocumentFileRepository.saveAs(document);
+      const result = await documentFileRepository.save(
+        document,
+        saveAs ? null : documentPath,
+      );
+      if (!result.saved) return;
+
+      setDocumentPath(result.path);
       setLastExplicitlySavedRevision(document.revision);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -302,12 +324,14 @@ export default function App() {
       <EditorToolbar
         canUndo={history.past.length > 0}
         canRedo={history.future.length > 0}
-        isDirty={lastExplicitlySavedRevision !== document.revision}
+        isDirty={isDirty}
+        onNew={newDocument}
         onAddText={addText}
         onUndo={() => dispatch({ type: "history/undo", occurredAt: now() })}
         onRedo={() => dispatch({ type: "history/redo", occurredAt: now() })}
         onOpen={() => void openDocument()}
         onSave={() => void saveDocument()}
+        onSaveAs={() => void saveDocument(true)}
       />
     </main>
   );

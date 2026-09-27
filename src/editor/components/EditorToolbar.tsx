@@ -2,22 +2,26 @@ type EditorToolbarProps = {
   canUndo: boolean;
   canRedo: boolean;
   isDirty: boolean;
+  onNew: () => void;
   onAddText: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onOpen: () => void;
   onSave: () => void;
+  onSaveAs: () => void;
 };
 
 export function EditorToolbar({
   canUndo,
   canRedo,
   isDirty,
+  onNew,
   onAddText,
   onUndo,
   onRedo,
   onOpen,
   onSave,
+  onSaveAs,
 }: EditorToolbarProps) {
   return (
     <aside className="tool-panel" aria-label="Canvas tools">
@@ -66,6 +70,18 @@ export function EditorToolbar({
       <button
         className="tool-button"
         type="button"
+        aria-label="New document"
+        title="New document"
+        onClick={onNew}
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
+          <path d="M6 3h8l4 4v14H6V3Zm8 0v5h4M9 14h6M12 11v6" />
+        </svg>
+      </button>
+
+      <button
+        className="tool-button"
+        type="button"
         aria-label="Open JSON document"
         title="Open JSON document"
         onClick={onOpen}
@@ -89,6 +105,18 @@ export function EditorToolbar({
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
           <path d="M5 4h12l2 2v14H5V4Zm3 0v6h8V4M8 20v-6h8v6" />
+        </svg>
+      </button>
+
+      <button
+        className="tool-button"
+        type="button"
+        aria-label="Save JSON document as"
+        title="Save JSON document as"
+        onClick={onSaveAs}
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
+          <path d="M5 4h10l2 2v6M8 4v6h7V4M5 14v6h6M13 19l5.5-5.5 2 2L15 21h-2v-2Z" />
         </svg>
       </button>
     </aside>
