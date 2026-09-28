@@ -7,6 +7,7 @@ import type {
   ObjectFrame,
   RectangleObject,
   TextAlignment,
+  TextContent,
   TextObject,
 } from "./objects";
 
@@ -83,6 +84,19 @@ function parseTextAlignment(value: unknown, path: string): TextAlignment {
   throw new InvalidDocumentError(`${path} has an unsupported alignment`);
 }
 
+function parseTextContent(
+  value: Record<string, unknown>,
+  path: string,
+): TextContent {
+  return {
+    text: string(value.text, `${path}.text`),
+    fontSize: positiveNumber(value.fontSize, `${path}.fontSize`),
+    fontFamily: string(value.fontFamily, `${path}.fontFamily`),
+    textColor: string(value.textColor, `${path}.textColor`),
+    textAlign: parseTextAlignment(value.textAlign, `${path}.textAlign`),
+  };
+}
+
 function parseTextObject(
   value: Record<string, unknown>,
   path: string,
@@ -91,11 +105,7 @@ function parseTextObject(
     id: string(value.id, `${path}.id`),
     type: "text",
     ...parseFrame(value, path),
-    text: string(value.text, `${path}.text`),
-    fontSize: positiveNumber(value.fontSize, `${path}.fontSize`),
-    fontFamily: string(value.fontFamily, `${path}.fontFamily`),
-    textColor: string(value.textColor, `${path}.textColor`),
-    textAlign: parseTextAlignment(value.textAlign, `${path}.textAlign`),
+    ...parseTextContent(value, path),
   };
 }
 
@@ -109,6 +119,7 @@ function parseRectangleObject(
     ...parseFrame(value, path),
     color: string(value.color, `${path}.color`),
     strokeWidth: nonNegativeNumber(value.strokeWidth, `${path}.strokeWidth`),
+    ...parseTextContent(value, path),
   };
 }
 

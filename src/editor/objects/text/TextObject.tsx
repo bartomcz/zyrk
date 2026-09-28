@@ -15,6 +15,7 @@ function TextObjectRenderer({
 }: ObjectRendererProps<TextObject>) {
   return (
     <Text
+      name="editable-text"
       text={object.text}
       width={object.width}
       height={object.height}
@@ -59,6 +60,7 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
   textEditor: {
     multiline: false,
     emptyValue: "Text",
+    resizeBehavior: "scale",
     getValue: (object) => object.text,
     withValue: (object, value) =>
       value === object.text ? object : { ...object, text: value },

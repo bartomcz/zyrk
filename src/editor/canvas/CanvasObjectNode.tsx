@@ -89,24 +89,35 @@ export function CanvasObjectNode({
           const anchor = transformerRef.current?.getActiveAnchor();
           horizontalResizeRef.current =
             (anchor === "middle-left" || anchor === "middle-right") &&
-            Boolean(objectRef.current?.findOne<Konva.Text>("Text"));
+            definition.textEditor?.resizeBehavior === "scale";
           resizedWidthRef.current = null;
         }}
         onTransform={() => {
-          if (!horizontalResizeRef.current) return;
-
           const node = objectRef.current;
-          const text = node?.findOne<Konva.Text>("Text");
+          const text = node?.findOne<Konva.Text>(".editable-text");
           if (!node || !text) return;
 
-          const width = Math.max(
-            definition.transform.minWidth,
-            text.width() * Math.abs(node.scaleX()),
-          );
-          text.width(width);
-          node.scaleX(1);
-          resizedWidthRef.current = width;
-          transformerRef.current?.forceUpdate();
+          if (horizontalResizeRef.current) {
+            const width = Math.max(
+              definition.transform.minWidth,
+              text.width() * Math.abs(node.scaleX()),
+            );
+            text.width(width);
+            node.scaleX(1);
+            resizedWidthRef.current = width;
+            transformerRef.current?.forceUpdate();
+            return;
+          }
+
+          if (definition.textEditor?.resizeBehavior !== "fixed") return;
+
+          const scaleX = Math.abs(node.scaleX());
+          const scaleY = Math.abs(node.scaleY());
+          if (!scaleX || !scaleY) return;
+
+          text.width(object.width * scaleX);
+          text.height(object.height * scaleY);
+          text.scale({ x: 1 / scaleX, y: 1 / scaleY });
         }}
         onTransformEnd={(event) => {
           const node = event.target;
@@ -123,6 +134,11 @@ export function CanvasObjectNode({
 
           node.scaleX(1);
           node.scaleY(1);
+          if (definition.textEditor?.resizeBehavior === "fixed") {
+            objectRef.current
+              ?.findOne<Konva.Text>(".editable-text")
+              ?.scale({ x: 1, y: 1 });
+          }
           horizontalResizeRef.current = false;
           resizedWidthRef.current = null;
           updateFrame({

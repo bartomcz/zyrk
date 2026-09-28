@@ -21,6 +21,7 @@ export type ObjectRendererProps<TObject extends CanvasObject> = {
 export type TextEditorBehavior<TObject extends CanvasObject> = {
   multiline: boolean;
   emptyValue: string;
+  resizeBehavior: "scale" | "fixed";
   getValue: (object: TObject) => string;
   withValue: (object: TObject, value: string) => TObject;
   getStyle: (object: TObject) => CSSProperties;
