@@ -5,6 +5,7 @@ import {
 import type {
   CanvasObject,
   ObjectFrame,
+  RectangleObject,
   TextAlignment,
   TextObject,
 } from "./objects";
@@ -49,9 +50,17 @@ function positiveNumber(value: unknown, path: string): number {
   return parsed;
 }
 
-function nonNegativeInteger(value: unknown, path: string): number {
+function nonNegativeNumber(value: unknown, path: string): number {
   const parsed = finiteNumber(value, path);
-  if (!Number.isInteger(parsed) || parsed < 0) {
+  if (parsed < 0) {
+    throw new InvalidDocumentError(`${path} must be non-negative`);
+  }
+  return parsed;
+}
+
+function nonNegativeInteger(value: unknown, path: string): number {
+  const parsed = nonNegativeNumber(value, path);
+  if (!Number.isInteger(parsed)) {
     throw new InvalidDocumentError(`${path} must be a non-negative integer`);
   }
   return parsed;
@@ -90,6 +99,19 @@ function parseTextObject(
   };
 }
 
+function parseRectangleObject(
+  value: Record<string, unknown>,
+  path: string,
+): RectangleObject {
+  return {
+    id: string(value.id, `${path}.id`),
+    type: "rectangle",
+    ...parseFrame(value, path),
+    color: string(value.color, `${path}.color`),
+    strokeWidth: nonNegativeNumber(value.strokeWidth, `${path}.strokeWidth`),
+  };
+}
+
 function parseCanvasObject(value: unknown, path: string): CanvasObject {
   const candidate = record(value, path);
   const type = string(candidate.type, `${path}.type`);
@@ -97,6 +119,8 @@ function parseCanvasObject(value: unknown, path: string): CanvasObject {
   switch (type) {
     case "text":
       return parseTextObject(candidate, path);
+    case "rectangle":
+      return parseRectangleObject(candidate, path);
     default:
       throw new InvalidDocumentError(
         `${path}.type contains unsupported object type "${type}"`,

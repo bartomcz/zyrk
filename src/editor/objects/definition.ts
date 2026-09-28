@@ -34,6 +34,7 @@ export type CanvasObjectDefinition<TObject extends CanvasObject> = {
     minHeight: number;
     canResize: boolean;
     canRotate: boolean;
+    keepRatio: boolean;
     withFrame: (object: TObject, frame: ObjectFrame) => TObject;
   };
   textEditor?: TextEditorBehavior<TObject>;

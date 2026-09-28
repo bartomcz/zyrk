@@ -6,6 +6,7 @@ import { EditorToolbar } from "./editor/components/EditorToolbar";
 import {
   createObjectId,
   type CanvasObject,
+  type CanvasObjectType,
   type ObjectId,
 } from "./editor/model/objects";
 import {
@@ -96,13 +97,13 @@ export default function App() {
     setView({ x: size.width / 2, y: size.height / 2, scale: 1 });
   };
 
-  const addText = () => {
+  const addObject = (type: CanvasObjectType) => {
     const offset = ((document.order.length - 1) % 6) * 12;
     const center = {
       x: (size.width / 2 - view.x) / view.scale,
       y: (size.height / 2 - view.y) / view.scale,
     };
-    const object = createCanvasObject("text", {
+    const object = createCanvasObject(type, {
       id: createObjectId(),
       center,
       offset,
@@ -225,7 +226,8 @@ export default function App() {
         canRedo={canRedo}
         isDirty={isDirty}
         onNew={newDocument}
-        onAddText={addText}
+        onAddText={() => addObject("text")}
+        onAddRectangle={() => addObject("rectangle")}
         onUndo={undo}
         onRedo={redo}
         onOpen={() => void openDocument()}

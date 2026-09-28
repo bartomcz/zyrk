@@ -48,7 +48,8 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
     minWidth: 40,
     minHeight: 24,
     canResize: true,
-    canRotate: true,
+    canRotate: false,
+    keepRatio: true,
     withFrame: (object, frame) => ({
       ...object,
       ...frame,

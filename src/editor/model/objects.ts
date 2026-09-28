@@ -18,17 +18,23 @@ export type TextContent = {
   textAlign: TextAlignment;
 };
 
+export type ShapeStyle = {
+  color: string;
+  strokeWidth: number;
+};
+
 type CanvasObjectBase<TType extends string> = ObjectFrame & {
   id: ObjectId;
   type: TType;
 };
 
 export type TextObject = CanvasObjectBase<"text"> & TextContent;
+export type RectangleObject = CanvasObjectBase<"rectangle"> & ShapeStyle;
 
 // Add each serializable object variant here. Shared data belongs in small
 // composable types such as ObjectFrame and TextContent rather than a base
 // object with many optional properties.
-export type CanvasObject = TextObject;
+export type CanvasObject = TextObject | RectangleObject;
 
 export type CanvasObjectType = CanvasObject["type"];
 

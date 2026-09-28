@@ -4,6 +4,7 @@ type EditorToolbarProps = {
   isDirty: boolean;
   onNew: () => void;
   onAddText: () => void;
+  onAddRectangle: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onOpen: () => void;
@@ -17,6 +18,7 @@ export function EditorToolbar({
   isDirty,
   onNew,
   onAddText,
+  onAddRectangle,
   onUndo,
   onRedo,
   onOpen,
@@ -34,6 +36,18 @@ export function EditorToolbar({
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
           <path d="M5 5h14M12 5v14M8.5 19h7" />
+        </svg>
+      </button>
+
+      <button
+        className="tool-button"
+        type="button"
+        aria-label="Add rectangle"
+        title="Add rectangle"
+        onClick={onAddRectangle}
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
+          <path d="M4 6h16v12H4Z" />
         </svg>
       </button>
 

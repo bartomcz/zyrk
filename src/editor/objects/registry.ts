@@ -8,10 +8,12 @@ import type {
   CanvasObjectDefinitionRegistry,
   CreateObjectContext,
 } from "./definition";
+import { rectangleObjectDefinition } from "./rectangle/RectangleObject";
 import { textObjectDefinition } from "./text/TextObject";
 
 export const objectDefinitions = {
   text: textObjectDefinition,
+  rectangle: rectangleObjectDefinition,
 } satisfies CanvasObjectDefinitionRegistry;
 
 export function getObjectDefinition<TObject extends CanvasObject>(
@@ -28,7 +30,7 @@ export function createCanvasObject<TType extends CanvasObjectType>(
   type: TType,
   context: CreateObjectContext,
 ): CanvasObjectByType[TType] {
-  const definition = objectDefinitions[type] as CanvasObjectDefinition<
+  const definition = objectDefinitions[type] as unknown as CanvasObjectDefinition<
     CanvasObjectByType[TType]
   >;
   return definition.create(context);

@@ -88,7 +88,8 @@ export function CanvasObjectNode({
         onTransformStart={() => {
           const anchor = transformerRef.current?.getActiveAnchor();
           horizontalResizeRef.current =
-            anchor === "middle-left" || anchor === "middle-right";
+            (anchor === "middle-left" || anchor === "middle-right") &&
+            Boolean(objectRef.current?.findOne<Konva.Text>("Text"));
           resizedWidthRef.current = null;
         }}
         onTransform={() => {
@@ -144,7 +145,8 @@ export function CanvasObjectNode({
         <Transformer
           ref={transformerRef}
           resizeEnabled={definition.transform.canResize}
-          rotateEnabled={false}
+          rotateEnabled={definition.transform.canRotate}
+          keepRatio={definition.transform.keepRatio}
           enabledAnchors={[
             "top-left",
             "top-right",
@@ -154,7 +156,6 @@ export function CanvasObjectNode({
             "middle-right",
           ]}
           flipEnabled={false}
-          keepRatio={true}
           borderStroke="#4f46e5"
           borderStrokeWidth={1.5}
           anchorFill="#fff"

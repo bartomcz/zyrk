@@ -4,8 +4,9 @@ Zyrk is a Tauri 2 + React + TypeScript + Konva.js canvas editor built with
 Vite. Canvas objects live in a versioned document model and are rendered
 through a typed object registry.
 
-Current editor features include text objects, pan and zoom, grouped undo/redo,
-validated JSON import/export, and automatic crash-recovery snapshots.
+Current editor features include text and rectangle objects, pan and zoom,
+grouped undo/redo, validated JSON import/export, and automatic crash-recovery
+snapshots.
 
 ## Setup
 
