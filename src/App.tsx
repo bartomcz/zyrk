@@ -72,16 +72,51 @@ export default function App() {
   }, [document.objects, editing, selectedObjectId]);
 
   useEffect(() => {
-    const deleteSelectedObject = (event: KeyboardEvent) => {
-      if (event.key !== "Backspace" || editing || !selectedObjectId) return;
+    const handleEditorShortcut = (event: KeyboardEvent) => {
+      if (editing || !selectedObjectId) return;
+
+      if (event.key === "Backspace") {
+        event.preventDefault();
+        applyCommand({ type: "object/remove", ids: [selectedObjectId] });
+        return;
+      }
+
+      if (
+        event.key.toLowerCase() !== "d" ||
+        (!event.metaKey && !event.ctrlKey) ||
+        event.altKey ||
+        event.shiftKey
+      ) {
+        return;
+      }
+
+      const selectedObject = document.objects[selectedObjectId];
+      if (!selectedObject) return;
 
       event.preventDefault();
-      applyCommand({ type: "object/remove", ids: [selectedObjectId] });
+      const duplicate: CanvasObject = {
+        ...selectedObject,
+        id: createObjectId(),
+        x: selectedObject.x + 12,
+        y: selectedObject.y + 12,
+      };
+      applyCommand({
+        type: "object/add",
+        object: duplicate,
+        index: document.order.indexOf(selectedObjectId) + 1,
+      });
+      setSelectedObjectId(duplicate.id);
     };
 
-    window.addEventListener("keydown", deleteSelectedObject);
-    return () => window.removeEventListener("keydown", deleteSelectedObject);
-  }, [applyCommand, editing, selectedObjectId]);
+    window.addEventListener("keydown", handleEditorShortcut);
+    return () => window.removeEventListener("keydown", handleEditorShortcut);
+  }, [
+    applyCommand,
+    document.objects,
+    document.order,
+    editing,
+    selectedObjectId,
+  ]);
 
   const newDocument = () => {
     if (
