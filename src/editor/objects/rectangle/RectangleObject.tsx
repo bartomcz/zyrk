@@ -66,7 +66,7 @@ export const rectangleObjectDefinition: CanvasObjectDefinition<RectangleObject> 
       withFrame: (object, frame) => ({ ...object, ...frame }),
     },
     textEditor: {
-      multiline: false,
+      multiline: true,
       emptyValue: "",
       resizeBehavior: "fixed",
       getValue: (object) => object.text,

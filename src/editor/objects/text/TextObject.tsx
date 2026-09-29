@@ -58,7 +58,7 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
     }),
   },
   textEditor: {
-    multiline: false,
+    multiline: true,
     emptyValue: "Text",
     resizeBehavior: "scale",
     getValue: (object) => object.text,
