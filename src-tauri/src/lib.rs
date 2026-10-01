@@ -29,6 +29,18 @@ fn write_document(path: &Path, contents: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn confirm_discard_changes() -> bool {
+    rfd::AsyncMessageDialog::new()
+        .set_level(rfd::MessageLevel::Warning)
+        .set_title("Unsaved changes")
+        .set_description("Discard unsaved changes and create a new document?")
+        .set_buttons(rfd::MessageButtons::YesNo)
+        .show()
+        .await
+        == rfd::MessageDialogResult::Yes
+}
+
+#[tauri::command]
 async fn open_document() -> Result<Option<(String, String)>, String> {
     let Some(selected) = rfd::AsyncFileDialog::new()
         .add_filter("Zyrk document", &["zyrk.json", "json"])
@@ -129,6 +141,7 @@ fn clear_recovery_snapshots(app: tauri::AppHandle) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
+            confirm_discard_changes,
             open_document,
             save_document,
             load_recovery_snapshots,

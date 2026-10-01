@@ -1,3 +1,4 @@
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import "./App.css";
 import { CanvasStage, type CanvasView } from "./editor/canvas/CanvasStage";
@@ -118,10 +119,12 @@ export default function App() {
     selectedObjectId,
   ]);
 
-  const newDocument = () => {
+  const newDocument = async () => {
     if (
       isDirty &&
-      !window.confirm("Discard unsaved changes and create a new document?")
+      !(isTauri()
+        ? await invoke<boolean>("confirm_discard_changes")
+        : window.confirm("Discard unsaved changes and create a new document?"))
     ) {
       return;
     }
