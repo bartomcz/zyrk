@@ -8,6 +8,7 @@ import {
   createObjectId,
   type CanvasObject,
   type CanvasObjectType,
+  type ConnectionEndpoint,
   type ObjectId,
 } from "./editor/model/objects";
 import {
@@ -155,6 +156,16 @@ export default function App() {
     applyCommand({ type: "object/update", object });
   };
 
+  const addConnection = (
+    from: ConnectionEndpoint,
+    to: ConnectionEndpoint,
+  ) => {
+    applyCommand({
+      type: "connection/add",
+      connection: { id: createObjectId(), from, to },
+    });
+  };
+
   const beginEditing = (objectId: ObjectId) => {
     const object = document.objects[objectId];
     if (!object || !getObjectDefinition(object).textEditor) return;
@@ -246,6 +257,7 @@ export default function App() {
         onViewChange={setView}
         onSelectObject={setSelectedObjectId}
         onBeginEditing={beginEditing}
+        onConnect={addConnection}
         onChangeObject={updateObject}
       />
 

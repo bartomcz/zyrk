@@ -1,19 +1,25 @@
 import type Konva from "konva";
 import { useLayoutEffect, useRef } from "react";
-import { Group, Transformer } from "react-konva";
+import { Circle, Group, Transformer } from "react-konva";
 import type {
   CanvasObject,
+  ConnectionEndpoint,
   ObjectFrame,
   ObjectId,
 } from "../model/objects";
 import { getObjectDefinition } from "../objects/registry";
+import { getEdgePoint, OBJECT_EDGES } from "./connections";
 
 type CanvasObjectNodeProps = {
   object: CanvasObject;
   selected: boolean;
   editing: boolean;
+  viewScale: number;
+  liveFrame?: ObjectFrame;
   onSelect: (id: ObjectId) => void;
   onBeginEditing: (id: ObjectId) => void;
+  onBeginConnection: (from: ConnectionEndpoint) => void;
+  onPreviewFrame: (id: ObjectId, frame: ObjectFrame | null) => void;
   onChange: (object: CanvasObject) => void;
 };
 
@@ -22,15 +28,19 @@ function setCanvasCursor(
   cursor: string,
 ) {
   const stage = event.target.getStage();
-  if (stage) stage.container().style.cursor = cursor;
+  if (stage) stage.getContent().style.cursor = cursor;
 }
 
 export function CanvasObjectNode({
   object,
   selected,
   editing,
+  viewScale,
+  liveFrame,
   onSelect,
   onBeginEditing,
+  onBeginConnection,
+  onPreviewFrame,
   onChange,
 }: CanvasObjectNodeProps) {
   const definition = getObjectDefinition(object);
@@ -50,6 +60,26 @@ export function CanvasObjectNode({
   const updateFrame = (frame: ObjectFrame) => {
     onChange(definition.transform.withFrame(object, frame));
   };
+
+  const transformedFrame = (node: Konva.Group): ObjectFrame => ({
+    x: node.x(),
+    y: node.y(),
+    width: horizontalResizeRef.current
+      ? (resizedWidthRef.current ?? object.width)
+      : Math.max(
+          definition.transform.minWidth,
+          object.width * Math.abs(node.scaleX()),
+        ),
+    height: Math.max(
+      definition.transform.minHeight,
+      object.height * Math.abs(node.scaleY()),
+    ),
+    rotation: node.rotation(),
+  });
+
+  const displayedObject: CanvasObject = liveFrame
+    ? { ...object, ...liveFrame }
+    : object;
 
   return (
     <>
@@ -75,14 +105,25 @@ export function CanvasObjectNode({
           onSelect(object.id);
           setCanvasCursor(event, "grabbing");
         }}
-        onDragEnd={(event) => {
-          updateFrame({
+        onDragMove={(event) => {
+          onPreviewFrame(object.id, {
             x: event.target.x(),
             y: event.target.y(),
             width: object.width,
             height: object.height,
             rotation: object.rotation,
           });
+        }}
+        onDragEnd={(event) => {
+          const frame = {
+            x: event.target.x(),
+            y: event.target.y(),
+            width: object.width,
+            height: object.height,
+            rotation: object.rotation,
+          };
+          onPreviewFrame(object.id, null);
+          updateFrame(frame);
           setCanvasCursor(event, "move");
         }}
         onTransformStart={() => {
@@ -95,9 +136,9 @@ export function CanvasObjectNode({
         onTransform={() => {
           const node = objectRef.current;
           const text = node?.findOne<Konva.Text>(".editable-text");
-          if (!node || !text) return;
+          if (!node) return;
 
-          if (horizontalResizeRef.current) {
+          if (text && horizontalResizeRef.current) {
             const width = Math.max(
               definition.transform.minWidth,
               text.width() * Math.abs(node.scaleX()),
@@ -106,31 +147,22 @@ export function CanvasObjectNode({
             node.scaleX(1);
             resizedWidthRef.current = width;
             transformerRef.current?.forceUpdate();
-            return;
+          } else if (text && definition.textEditor?.resizeBehavior === "fixed") {
+            const scaleX = Math.abs(node.scaleX());
+            const scaleY = Math.abs(node.scaleY());
+            if (scaleX && scaleY) {
+              text.width(object.width * scaleX);
+              text.height(object.height * scaleY);
+              text.scale({ x: 1 / scaleX, y: 1 / scaleY });
+            }
           }
 
-          if (definition.textEditor?.resizeBehavior !== "fixed") return;
-
-          const scaleX = Math.abs(node.scaleX());
-          const scaleY = Math.abs(node.scaleY());
-          if (!scaleX || !scaleY) return;
-
-          text.width(object.width * scaleX);
-          text.height(object.height * scaleY);
-          text.scale({ x: 1 / scaleX, y: 1 / scaleY });
+          onPreviewFrame(object.id, transformedFrame(node));
         }}
         onTransformEnd={(event) => {
-          const node = event.target;
-          const width = horizontalResizeRef.current
-            ? (resizedWidthRef.current ?? object.width)
-            : Math.max(
-                definition.transform.minWidth,
-                object.width * Math.abs(node.scaleX()),
-              );
-          const height = Math.max(
-            definition.transform.minHeight,
-            object.height * Math.abs(node.scaleY()),
-          );
+          const node = objectRef.current;
+          if (!node) return;
+          const frame = transformedFrame(node);
 
           node.scaleX(1);
           node.scaleY(1);
@@ -141,13 +173,8 @@ export function CanvasObjectNode({
           }
           horizontalResizeRef.current = false;
           resizedWidthRef.current = null;
-          updateFrame({
-            x: node.x(),
-            y: node.y(),
-            width,
-            height,
-            rotation: node.rotation(),
-          });
+          onPreviewFrame(object.id, null);
+          updateFrame(frame);
           setCanvasCursor(event, "move");
         }}
         onMouseEnter={(event) =>
@@ -158,28 +185,51 @@ export function CanvasObjectNode({
         <Renderer object={object} editing={editing} />
       </Group>
       {selected && !editing && (
-        <Transformer
-          ref={transformerRef}
-          resizeEnabled={definition.transform.canResize}
-          rotateEnabled={definition.transform.canRotate}
-          keepRatio={definition.transform.keepRatio}
-          enabledAnchors={[
-            "top-left",
-            "top-right",
-            "bottom-left",
-            "bottom-right",
-            "middle-left",
-            "middle-right",
-          ]}
-          flipEnabled={false}
-          borderStroke="#4f46e5"
-          borderStrokeWidth={1.5}
-          anchorFill="#fff"
-          anchorStroke="#4f46e5"
-          anchorStrokeWidth={1.5}
-          anchorSize={10}
-          anchorCornerRadius={2}
-        />
+        <>
+          <Transformer
+            ref={transformerRef}
+            resizeEnabled={definition.transform.canResize}
+            rotateEnabled={definition.transform.canRotate}
+            keepRatio={definition.transform.keepRatio}
+            enabledAnchors={[
+              "top-left",
+              "top-right",
+              "bottom-left",
+              "bottom-right",
+              "middle-left",
+              "middle-right",
+            ]}
+            flipEnabled={false}
+            borderStroke="#4f46e5"
+            borderStrokeWidth={1.5}
+            anchorFill="#fff"
+            anchorStroke="#4f46e5"
+            anchorStrokeWidth={1.5}
+            anchorSize={10}
+            anchorCornerRadius={2}
+          />
+          {OBJECT_EDGES.map((edge) => {
+            const point = getEdgePoint(displayedObject, edge, 14 / viewScale);
+            return (
+              <Circle
+                key={edge}
+                x={point.x}
+                y={point.y}
+                radius={6 / viewScale}
+                fill="#fff"
+                stroke="#4f46e5"
+                strokeWidth={1.5}
+                strokeScaleEnabled={false}
+                onMouseDown={(event) => {
+                  event.cancelBubble = true;
+                  onBeginConnection({ objectId: object.id, edge });
+                }}
+                onMouseEnter={(event) => setCanvasCursor(event, "pointer")}
+                onMouseLeave={(event) => setCanvasCursor(event, "move")}
+              />
+            );
+          })}
+        </>
       )}
     </>
   );

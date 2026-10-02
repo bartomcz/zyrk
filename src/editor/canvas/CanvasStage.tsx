@@ -1,8 +1,19 @@
 import type Konva from "konva";
-import { Layer, Shape, Stage } from "react-konva";
+import { useState } from "react";
+import { Arrow, Layer, Shape, Stage } from "react-konva";
 import type { CanvasDocument } from "../model/document";
-import type { CanvasObject, ObjectId } from "../model/objects";
+import type {
+  CanvasObject,
+  ConnectionEndpoint,
+  ObjectFrame,
+  ObjectId,
+} from "../model/objects";
 import { CanvasObjectNode } from "./CanvasObjectNode";
+import {
+  findObjectEdgeAt,
+  getEdgePoint,
+  type CanvasPoint,
+} from "./connections";
 
 const GRID_SIZE = 100;
 const MIN_SCALE = 0.2;
@@ -20,6 +31,7 @@ type CanvasStageProps = {
   onViewChange: (view: CanvasView) => void;
   onSelectObject: (id: ObjectId | null) => void;
   onBeginEditing: (id: ObjectId) => void;
+  onConnect: (from: ConnectionEndpoint, to: ConnectionEndpoint) => void;
   onChangeObject: (object: CanvasObject) => void;
 };
 
@@ -32,12 +44,44 @@ export function CanvasStage({
   onViewChange,
   onSelectObject,
   onBeginEditing,
+  onConnect,
   onChangeObject,
 }: CanvasStageProps) {
+  const [pendingConnection, setPendingConnection] = useState<{
+    from: ConnectionEndpoint;
+    pointer: CanvasPoint;
+  } | null>(null);
+  const [liveFrames, setLiveFrames] = useState<Record<ObjectId, ObjectFrame>>(
+    {},
+  );
   const left = -view.x / view.scale;
   const top = -view.y / view.scale;
   const right = left + size.width / view.scale;
   const bottom = top + size.height / view.scale;
+
+  const displayedObject = (object: CanvasObject): CanvasObject => {
+    const frame = liveFrames[object.id];
+    return frame ? { ...object, ...frame } : object;
+  };
+
+  const previewFrame = (id: ObjectId, frame: ObjectFrame | null) => {
+    setLiveFrames((current) => {
+      if (frame) return { ...current, [id]: frame };
+      if (!current[id]) return current;
+      const next = { ...current };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const getWorldPointer = (stage: Konva.Stage | null): CanvasPoint | null => {
+    const pointer = stage?.getPointerPosition();
+    if (!stage || !pointer) return null;
+    return {
+      x: (pointer.x - stage.x()) / stage.scaleX(),
+      y: (pointer.y - stage.y()) / stage.scaleY(),
+    };
+  };
 
   const zoom = (event: Konva.KonvaEventObject<WheelEvent>) => {
     event.evt.preventDefault();
@@ -69,7 +113,7 @@ export function CanvasStage({
       y={view.y}
       scaleX={view.scale}
       scaleY={view.scale}
-      draggable
+      draggable={!pendingConnection}
       onDragMove={(event) => {
         if (event.target !== event.currentTarget) return;
 
@@ -80,6 +124,28 @@ export function CanvasStage({
         });
       }}
       onWheel={zoom}
+      onMouseMove={(event) => {
+        if (!pendingConnection) return;
+        const pointer = getWorldPointer(event.target.getStage());
+        if (pointer) setPendingConnection({ ...pendingConnection, pointer });
+      }}
+      onMouseUp={(event) => {
+        if (!pendingConnection) return;
+        const pointer = getWorldPointer(event.target.getStage());
+        const target =
+          pointer &&
+          findObjectEdgeAt(
+            [...document.order]
+              .reverse()
+              .map((id) => document.objects[id])
+              .filter((object): object is CanvasObject => Boolean(object)),
+            pointer,
+            pendingConnection.from.objectId,
+            10 / view.scale,
+          );
+        if (target) onConnect(pendingConnection.from, target);
+        setPendingConnection(null);
+      }}
       onClick={(event) => {
         if (event.target === event.currentTarget) onSelectObject(null);
       }}
@@ -116,6 +182,33 @@ export function CanvasStage({
       </Layer>
 
       <Layer>
+        {document.connections.map((connection) => {
+          const storedFromObject = document.objects[connection.from.objectId];
+          const storedToObject = document.objects[connection.to.objectId];
+          if (!storedFromObject || !storedToObject) return null;
+          const from = getEdgePoint(
+            displayedObject(storedFromObject),
+            connection.from.edge,
+          );
+          const to = getEdgePoint(
+            displayedObject(storedToObject),
+            connection.to.edge,
+          );
+
+          return (
+            <Arrow
+              key={connection.id}
+              points={[from.x, from.y, to.x, to.y]}
+              stroke="#4f46e5"
+              fill="#4f46e5"
+              strokeWidth={2}
+              strokeScaleEnabled={false}
+              pointerLength={10 / view.scale}
+              pointerWidth={10 / view.scale}
+              listening={false}
+            />
+          );
+        })}
         {document.order.map((id) => {
           const object = document.objects[id];
           if (!object) return null;
@@ -126,13 +219,54 @@ export function CanvasStage({
               object={object}
               selected={selectedObjectId === object.id}
               editing={editingObjectId === object.id}
+              viewScale={view.scale}
+              liveFrame={liveFrames[object.id]}
               onSelect={onSelectObject}
               onBeginEditing={onBeginEditing}
+              onBeginConnection={(from) => {
+                const source = document.objects[from.objectId];
+                if (!source) return;
+                setPendingConnection({
+                  from,
+                  pointer: getEdgePoint(source, from.edge),
+                });
+              }}
+              onPreviewFrame={previewFrame}
               onChange={onChangeObject}
             />
           );
         })}
       </Layer>
+
+      {pendingConnection && (
+        <Layer listening={false}>
+          {(() => {
+            const source = document.objects[pendingConnection.from.objectId];
+            if (!source) return null;
+            const from = getEdgePoint(
+              displayedObject(source),
+              pendingConnection.from.edge,
+            );
+            return (
+              <Arrow
+                points={[
+                  from.x,
+                  from.y,
+                  pendingConnection.pointer.x,
+                  pendingConnection.pointer.y,
+                ]}
+                stroke="#4f46e5"
+                fill="#4f46e5"
+                strokeWidth={2}
+                strokeScaleEnabled={false}
+                pointerLength={10 / view.scale}
+                pointerWidth={10 / view.scale}
+                dash={[8 / view.scale, 6 / view.scale]}
+              />
+            );
+          })()}
+        </Layer>
+      )}
     </Stage>
   );
 }

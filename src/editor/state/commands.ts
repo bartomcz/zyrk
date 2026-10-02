@@ -1,11 +1,16 @@
 import type { CanvasDocument } from "../model/document";
-import type { CanvasObject, ObjectId } from "../model/objects";
+import type {
+  CanvasConnection,
+  CanvasObject,
+  ObjectId,
+} from "../model/objects";
 
 export type DocumentCommand =
   | { type: "object/add"; object: CanvasObject; index?: number }
   | { type: "object/update"; object: CanvasObject }
   | { type: "object/remove"; ids: ObjectId[] }
   | { type: "object/reorder"; order: ObjectId[] }
+  | { type: "connection/add"; connection: CanvasConnection }
   | { type: "document/rename"; title: string };
 
 function commitDocument(
@@ -80,6 +85,10 @@ export function applyDocumentCommand(
         {
           objects,
           order: document.order.filter((id) => !removedIds.has(id)),
+          connections: document.connections.filter(
+            ({ from, to }) =>
+              !removedIds.has(from.objectId) && !removedIds.has(to.objectId),
+          ),
         },
         occurredAt,
       );
@@ -100,6 +109,24 @@ export function applyDocumentCommand(
       return commitDocument(
         document,
         { order: [...command.order] },
+        occurredAt,
+      );
+    }
+
+    case "connection/add": {
+      const { connection } = command;
+      if (
+        document.connections.some(({ id }) => id === connection.id) ||
+        connection.from.objectId === connection.to.objectId ||
+        !document.objects[connection.from.objectId] ||
+        !document.objects[connection.to.objectId]
+      ) {
+        return document;
+      }
+
+      return commitDocument(
+        document,
+        { connections: [...document.connections, connection] },
         occurredAt,
       );
     }
