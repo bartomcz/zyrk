@@ -1,8 +1,9 @@
 import type Konva from "konva";
 import { useState } from "react";
-import { Arrow, Layer, Shape, Stage } from "react-konva";
+import { Arrow, Layer, Rect, Shape, Stage } from "react-konva";
 import type { CanvasDocument } from "../model/document";
 import type {
+  CanvasConnection,
   CanvasObject,
   ConnectionEndpoint,
   ObjectFrame,
@@ -34,6 +35,7 @@ type CanvasStageProps = {
   onSelectConnection: (id: string) => void;
   onBeginEditing: (id: ObjectId) => void;
   onConnect: (from: ConnectionEndpoint, to: ConnectionEndpoint) => void;
+  onChangeConnection: (connection: CanvasConnection) => void;
   onChangeObject: (object: CanvasObject) => void;
 };
 
@@ -49,10 +51,13 @@ export function CanvasStage({
   onSelectConnection,
   onBeginEditing,
   onConnect,
+  onChangeConnection,
   onChangeObject,
 }: CanvasStageProps) {
   const [pendingConnection, setPendingConnection] = useState<{
-    from: ConnectionEndpoint;
+    connectionId: string | null;
+    endpoint: "from" | "to";
+    fixed: ConnectionEndpoint;
     pointer: CanvasPoint;
   } | null>(null);
   const [liveFrames, setLiveFrames] = useState<Record<ObjectId, ObjectFrame>>(
@@ -86,6 +91,34 @@ export function CanvasStage({
       y: (pointer.y - stage.y()) / stage.scaleY(),
     };
   };
+
+  const getConnectionPoints = (connection: CanvasConnection) => {
+    const fromObject = document.objects[connection.from.objectId];
+    const toObject = document.objects[connection.to.objectId];
+    if (!fromObject || !toObject) return null;
+
+    const moving =
+      pendingConnection?.connectionId === connection.id
+        ? pendingConnection
+        : null;
+    return {
+      from:
+        moving?.endpoint === "from"
+          ? moving.pointer
+          : getEdgePoint(displayedObject(fromObject), connection.from.edge),
+      to:
+        moving?.endpoint === "to"
+          ? moving.pointer
+          : getEdgePoint(displayedObject(toObject), connection.to.edge),
+    };
+  };
+
+  const selectedConnection = document.connections.find(
+    ({ id }) => id === selectedConnectionId,
+  );
+  const selectedConnectionPoints = selectedConnection
+    ? getConnectionPoints(selectedConnection)
+    : null;
 
   const zoom = (event: Konva.KonvaEventObject<WheelEvent>) => {
     event.evt.preventDefault();
@@ -144,10 +177,24 @@ export function CanvasStage({
               .map((id) => document.objects[id])
               .filter((object): object is CanvasObject => Boolean(object)),
             pointer,
-            pendingConnection.from.objectId,
+            pendingConnection.fixed.objectId,
             10 / view.scale,
           );
-        if (target) onConnect(pendingConnection.from, target);
+        if (target) {
+          if (pendingConnection.connectionId) {
+            const connection = document.connections.find(
+              ({ id }) => id === pendingConnection.connectionId,
+            );
+            if (connection) {
+              onChangeConnection({
+                ...connection,
+                [pendingConnection.endpoint]: target,
+              });
+            }
+          } else {
+            onConnect(pendingConnection.fixed, target);
+          }
+        }
         setPendingConnection(null);
       }}
       onClick={(event) => {
@@ -187,28 +234,23 @@ export function CanvasStage({
 
       <Layer>
         {document.connections.map((connection) => {
-          const storedFromObject = document.objects[connection.from.objectId];
-          const storedToObject = document.objects[connection.to.objectId];
-          if (!storedFromObject || !storedToObject) return null;
-          const from = getEdgePoint(
-            displayedObject(storedFromObject),
-            connection.from.edge,
-          );
-          const to = getEdgePoint(
-            displayedObject(storedToObject),
-            connection.to.edge,
-          );
-
-          const selected = selectedConnectionId === connection.id;
-          const color = selected ? "#312e81" : "#4f46e5";
+          const points = getConnectionPoints(connection);
+          if (!points) return null;
+          const color =
+            selectedConnectionId === connection.id ? "#4f46e5" : "#171717";
 
           return (
             <Arrow
               key={connection.id}
-              points={[from.x, from.y, to.x, to.y]}
+              points={[
+                points.from.x,
+                points.from.y,
+                points.to.x,
+                points.to.y,
+              ]}
               stroke={color}
               fill={color}
-              strokeWidth={selected ? 4 : 2}
+              strokeWidth={2}
               strokeScaleEnabled={false}
               hitStrokeWidth={12 / view.scale}
               pointerLength={10 / view.scale}
@@ -236,7 +278,9 @@ export function CanvasStage({
                 const source = document.objects[from.objectId];
                 if (!source) return;
                 setPendingConnection({
-                  from,
+                  connectionId: null,
+                  endpoint: "to",
+                  fixed: from,
                   pointer: getEdgePoint(source, from.edge),
                 });
               }}
@@ -247,14 +291,50 @@ export function CanvasStage({
         })}
       </Layer>
 
-      {pendingConnection && (
+      {selectedConnection && selectedConnectionPoints && (
+        <Layer>
+          {(["from", "to"] as const).map((endpoint) => {
+            const point = selectedConnectionPoints[endpoint];
+            return (
+              <Rect
+                key={endpoint}
+                x={point.x}
+                y={point.y}
+                width={10 / view.scale}
+                height={10 / view.scale}
+                offsetX={5 / view.scale}
+                offsetY={5 / view.scale}
+                cornerRadius={2 / view.scale}
+                fill="#fff"
+                stroke="#4f46e5"
+                strokeWidth={1.5}
+                strokeScaleEnabled={false}
+                onMouseDown={(event) => {
+                  event.cancelBubble = true;
+                  setPendingConnection({
+                    connectionId: selectedConnection.id,
+                    endpoint,
+                    fixed:
+                      selectedConnection[
+                        endpoint === "from" ? "to" : "from"
+                      ],
+                    pointer: point,
+                  });
+                }}
+              />
+            );
+          })}
+        </Layer>
+      )}
+
+      {pendingConnection && !pendingConnection.connectionId && (
         <Layer listening={false}>
           {(() => {
-            const source = document.objects[pendingConnection.from.objectId];
+            const source = document.objects[pendingConnection.fixed.objectId];
             if (!source) return null;
             const from = getEdgePoint(
               displayedObject(source),
-              pendingConnection.from.edge,
+              pendingConnection.fixed.edge,
             );
             return (
               <Arrow

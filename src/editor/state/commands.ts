@@ -11,6 +11,7 @@ export type DocumentCommand =
   | { type: "object/remove"; ids: ObjectId[] }
   | { type: "object/reorder"; order: ObjectId[] }
   | { type: "connection/add"; connection: CanvasConnection }
+  | { type: "connection/update"; connection: CanvasConnection }
   | { type: "connection/remove"; id: string }
   | { type: "document/rename"; title: string };
 
@@ -130,6 +131,35 @@ export function applyDocumentCommand(
         { connections: [...document.connections, connection] },
         occurredAt,
       );
+    }
+
+    case "connection/update": {
+      const { connection } = command;
+      const index = document.connections.findIndex(
+        ({ id }) => id === connection.id,
+      );
+      if (
+        index === -1 ||
+        connection.from.objectId === connection.to.objectId ||
+        !document.objects[connection.from.objectId] ||
+        !document.objects[connection.to.objectId]
+      ) {
+        return document;
+      }
+
+      const current = document.connections[index];
+      if (
+        current.from.objectId === connection.from.objectId &&
+        current.from.edge === connection.from.edge &&
+        current.to.objectId === connection.to.objectId &&
+        current.to.edge === connection.to.edge
+      ) {
+        return document;
+      }
+
+      const connections = [...document.connections];
+      connections[index] = connection;
+      return commitDocument(document, { connections }, occurredAt);
     }
 
     case "connection/remove": {

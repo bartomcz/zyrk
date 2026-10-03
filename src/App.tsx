@@ -6,6 +6,7 @@ import { EditorOverlay } from "./editor/canvas/EditorOverlay";
 import { EditorToolbar } from "./editor/components/EditorToolbar";
 import {
   createObjectId,
+  type CanvasConnection,
   type CanvasObject,
   type CanvasObjectType,
   type ConnectionEndpoint,
@@ -189,6 +190,10 @@ export default function App() {
     });
   };
 
+  const updateConnection = (connection: CanvasConnection) => {
+    applyCommand({ type: "connection/update", connection });
+  };
+
   const beginEditing = (objectId: ObjectId) => {
     const object = document.objects[objectId];
     if (!object || !getObjectDefinition(object).textEditor) return;
@@ -291,6 +296,7 @@ export default function App() {
         }}
         onBeginEditing={beginEditing}
         onConnect={addConnection}
+        onChangeConnection={updateConnection}
         onChangeObject={updateObject}
       />
 
