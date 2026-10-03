@@ -63,6 +63,13 @@ test("connections snap to edges, persist, and are removed with an endpoint", asy
     );
     assert.deepEqual(document.connections, [connection]);
 
+    const documentWithoutConnection = applyDocumentCommand(
+      document,
+      { type: "connection/remove", id: connection.id },
+      "2026-01-01T00:00:02.000Z",
+    );
+    assert.deepEqual(documentWithoutConnection.connections, []);
+
     document = applyDocumentCommand(
       document,
       { type: "object/remove", ids: [target.id] },

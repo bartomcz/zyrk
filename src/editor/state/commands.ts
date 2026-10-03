@@ -11,6 +11,7 @@ export type DocumentCommand =
   | { type: "object/remove"; ids: ObjectId[] }
   | { type: "object/reorder"; order: ObjectId[] }
   | { type: "connection/add"; connection: CanvasConnection }
+  | { type: "connection/remove"; id: string }
   | { type: "document/rename"; title: string };
 
 function commitDocument(
@@ -129,6 +130,14 @@ export function applyDocumentCommand(
         { connections: [...document.connections, connection] },
         occurredAt,
       );
+    }
+
+    case "connection/remove": {
+      const connections = document.connections.filter(
+        ({ id }) => id !== command.id,
+      );
+      if (connections.length === document.connections.length) return document;
+      return commitDocument(document, { connections }, occurredAt);
     }
 
     case "document/rename": {

@@ -50,6 +50,9 @@ export default function App() {
   const [selectedObjectId, setSelectedObjectId] = useState<ObjectId | null>(
     null,
   );
+  const [selectedConnectionId, setSelectedConnectionId] = useState<
+    string | null
+  >(null);
   const [editing, setEditing] = useState<EditingSession | null>(null);
 
   const editedObject = editing
@@ -68,22 +71,39 @@ export default function App() {
     if (selectedObjectId && !document.objects[selectedObjectId]) {
       setSelectedObjectId(null);
     }
+    if (
+      selectedConnectionId &&
+      !document.connections.some(({ id }) => id === selectedConnectionId)
+    ) {
+      setSelectedConnectionId(null);
+    }
     if (editing && !document.objects[editing.objectId]) {
       setEditing(null);
     }
-  }, [document.objects, editing, selectedObjectId]);
+  }, [
+    document.connections,
+    document.objects,
+    editing,
+    selectedConnectionId,
+    selectedObjectId,
+  ]);
 
   useEffect(() => {
     const handleEditorShortcut = (event: KeyboardEvent) => {
-      if (editing || !selectedObjectId) return;
+      if (editing || (!selectedObjectId && !selectedConnectionId)) return;
 
       if (event.key === "Backspace") {
         event.preventDefault();
-        applyCommand({ type: "object/remove", ids: [selectedObjectId] });
+        if (selectedConnectionId) {
+          applyCommand({ type: "connection/remove", id: selectedConnectionId });
+        } else if (selectedObjectId) {
+          applyCommand({ type: "object/remove", ids: [selectedObjectId] });
+        }
         return;
       }
 
       if (
+        !selectedObjectId ||
         event.key.toLowerCase() !== "d" ||
         (!event.metaKey && !event.ctrlKey) ||
         event.altKey ||
@@ -117,6 +137,7 @@ export default function App() {
     document.objects,
     document.order,
     editing,
+    selectedConnectionId,
     selectedObjectId,
   ]);
 
@@ -132,6 +153,7 @@ export default function App() {
 
     replaceWithNewDocument();
     setSelectedObjectId(null);
+    setSelectedConnectionId(null);
     setEditing(null);
     setView({ x: size.width / 2, y: size.height / 2, scale: 1 });
   };
@@ -150,6 +172,7 @@ export default function App() {
 
     applyCommand({ type: "object/add", object });
     setSelectedObjectId(object.id);
+    setSelectedConnectionId(null);
   };
 
   const updateObject = (object: CanvasObject) => {
@@ -171,6 +194,7 @@ export default function App() {
     if (!object || !getObjectDefinition(object).textEditor) return;
 
     setSelectedObjectId(objectId);
+    setSelectedConnectionId(null);
     setEditing({
       objectId,
       historyGroupKey: `text-edit:${objectId}:${createObjectId()}`,
@@ -226,6 +250,7 @@ export default function App() {
       if (!(await openDocumentFile())) return;
 
       setSelectedObjectId(null);
+      setSelectedConnectionId(null);
       setEditing(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -253,9 +278,17 @@ export default function App() {
         view={view}
         document={document}
         selectedObjectId={selectedObjectId}
+        selectedConnectionId={selectedConnectionId}
         editingObjectId={editing?.objectId ?? null}
         onViewChange={setView}
-        onSelectObject={setSelectedObjectId}
+        onSelectObject={(id) => {
+          setSelectedObjectId(id);
+          setSelectedConnectionId(null);
+        }}
+        onSelectConnection={(id) => {
+          setSelectedObjectId(null);
+          setSelectedConnectionId(id);
+        }}
         onBeginEditing={beginEditing}
         onConnect={addConnection}
         onChangeObject={updateObject}

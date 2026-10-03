@@ -27,9 +27,11 @@ type CanvasStageProps = {
   view: CanvasView;
   document: CanvasDocument;
   selectedObjectId: ObjectId | null;
+  selectedConnectionId: string | null;
   editingObjectId: ObjectId | null;
   onViewChange: (view: CanvasView) => void;
   onSelectObject: (id: ObjectId | null) => void;
+  onSelectConnection: (id: string) => void;
   onBeginEditing: (id: ObjectId) => void;
   onConnect: (from: ConnectionEndpoint, to: ConnectionEndpoint) => void;
   onChangeObject: (object: CanvasObject) => void;
@@ -40,9 +42,11 @@ export function CanvasStage({
   view,
   document,
   selectedObjectId,
+  selectedConnectionId,
   editingObjectId,
   onViewChange,
   onSelectObject,
+  onSelectConnection,
   onBeginEditing,
   onConnect,
   onChangeObject,
@@ -195,17 +199,22 @@ export function CanvasStage({
             connection.to.edge,
           );
 
+          const selected = selectedConnectionId === connection.id;
+          const color = selected ? "#312e81" : "#4f46e5";
+
           return (
             <Arrow
               key={connection.id}
               points={[from.x, from.y, to.x, to.y]}
-              stroke="#4f46e5"
-              fill="#4f46e5"
-              strokeWidth={2}
+              stroke={color}
+              fill={color}
+              strokeWidth={selected ? 4 : 2}
               strokeScaleEnabled={false}
+              hitStrokeWidth={12 / view.scale}
               pointerLength={10 / view.scale}
               pointerWidth={10 / view.scale}
-              listening={false}
+              onClick={() => onSelectConnection(connection.id)}
+              onTap={() => onSelectConnection(connection.id)}
             />
           );
         })}
