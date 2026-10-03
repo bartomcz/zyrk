@@ -3,7 +3,10 @@ import {
   type CanvasDocument,
 } from "./document";
 import type {
+  CanvasConnection,
   CanvasObject,
+  ConnectionEndpoint,
+  ObjectEdge,
   ObjectFrame,
   RectangleObject,
   TextAlignment,
@@ -84,6 +87,38 @@ function parseTextAlignment(value: unknown, path: string): TextAlignment {
   throw new InvalidDocumentError(`${path} has an unsupported alignment`);
 }
 
+function parseObjectEdge(value: unknown, path: string): ObjectEdge {
+  if (
+    value === "top" ||
+    value === "right" ||
+    value === "bottom" ||
+    value === "left"
+  ) {
+    return value;
+  }
+  throw new InvalidDocumentError(`${path} has an unsupported object edge`);
+}
+
+function parseConnectionEndpoint(
+  value: unknown,
+  path: string,
+): ConnectionEndpoint {
+  const candidate = record(value, path);
+  return {
+    objectId: string(candidate.objectId, `${path}.objectId`),
+    edge: parseObjectEdge(candidate.edge, `${path}.edge`),
+  };
+}
+
+function parseConnection(value: unknown, path: string): CanvasConnection {
+  const candidate = record(value, path);
+  return {
+    id: string(candidate.id, `${path}.id`),
+    from: parseConnectionEndpoint(candidate.from, `${path}.from`),
+    to: parseConnectionEndpoint(candidate.to, `${path}.to`),
+  };
+}
+
 function parseTextContent(
   value: Record<string, unknown>,
   path: string,
@@ -147,6 +182,13 @@ function migrateDocumentValue(value: unknown): unknown {
   );
 
   if (version === DOCUMENT_SCHEMA_VERSION) return candidate;
+  if (version === 1) {
+    return {
+      ...candidate,
+      schemaVersion: DOCUMENT_SCHEMA_VERSION,
+      connections: [],
+    };
+  }
 
   throw new InvalidDocumentError(
     `Document schema version ${version} is not supported`,
@@ -187,6 +229,33 @@ export function parseCanvasDocumentValue(value: unknown): CanvasDocument {
     );
   }
 
+  if (!Array.isArray(candidate.connections)) {
+    throw new InvalidDocumentError("document.connections must be an array");
+  }
+  const connections = candidate.connections.map((connection, index) =>
+    parseConnection(connection, `document.connections.${index}`),
+  );
+  if (
+    new Set(connections.map((connection) => connection.id)).size !==
+    connections.length
+  ) {
+    throw new InvalidDocumentError(
+      "document.connections contains duplicate ids",
+    );
+  }
+  for (const [index, connection] of connections.entries()) {
+    if (!objects[connection.from.objectId] || !objects[connection.to.objectId]) {
+      throw new InvalidDocumentError(
+        `document.connections.${index} references an unknown object`,
+      );
+    }
+    if (connection.from.objectId === connection.to.objectId) {
+      throw new InvalidDocumentError(
+        `document.connections.${index} cannot connect an object to itself`,
+      );
+    }
+  }
+
   return {
     schemaVersion: DOCUMENT_SCHEMA_VERSION,
     id: string(candidate.id, "document.id"),
@@ -196,6 +265,7 @@ export function parseCanvasDocumentValue(value: unknown): CanvasDocument {
     updatedAt: string(candidate.updatedAt, "document.updatedAt"),
     objects,
     order,
+    connections,
   };
 }
 

@@ -29,7 +29,8 @@ src-tauri/
 - `schemaVersion` supports future migrations;
 - `id`, timestamps, and a monotonically changing `revision` identify state;
 - `objects` stores normalized objects by stable UUID;
-- `order` controls rendering and future layer ordering.
+- `order` controls object rendering and future layer ordering;
+- `connections` stores directed references between object edges.
 
 `src/editor/model/objects.ts` defines the discriminated `CanvasObject` union.
 Shared data is composed from focused types such as `ObjectFrame` and
@@ -65,9 +66,9 @@ To add an object type:
 5. Add the corresponding creation tool to the toolbar.
 
 Rectangle and circle objects can share fill/stroke data and transform helpers.
-Arrows should remain a distinct variant because endpoints and connection
-behavior differ. A sticky note should be one object composed with
-`TextContent`, not separately selectable rectangle and text objects.
+Connections remain separate document entities because their endpoints reference
+object edges. A sticky note should be one object composed with `TextContent`,
+not separately selectable rectangle and text objects.
 
 ## Commands and undo/redo
 
@@ -90,8 +91,8 @@ what is currently visible.
 ## Rendering and interaction
 
 `canvas/CanvasStage.tsx` owns pan, pointer-centered zoom, the unbounded grid,
-and ordered object rendering. The grid keeps the existing 100-unit spacing and
-light stroke while drawing only the visible world bounds.
+connection drawing, and ordered object rendering. The grid keeps the existing
+100-unit spacing and light stroke while drawing only the visible world bounds.
 
 `canvas/CanvasObjectNode.tsx` is the shared interaction shell. Its normalized
 `ObjectFrame` boundary is also where Konva Transformer resize output can later

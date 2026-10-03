@@ -1,11 +1,18 @@
 import type { CanvasDocument } from "../model/document";
-import type { CanvasObject, ObjectId } from "../model/objects";
+import type {
+  CanvasConnection,
+  CanvasObject,
+  ObjectId,
+} from "../model/objects";
 
 export type DocumentCommand =
   | { type: "object/add"; object: CanvasObject; index?: number }
   | { type: "object/update"; object: CanvasObject }
   | { type: "object/remove"; ids: ObjectId[] }
   | { type: "object/reorder"; order: ObjectId[] }
+  | { type: "connection/add"; connection: CanvasConnection }
+  | { type: "connection/update"; connection: CanvasConnection }
+  | { type: "connection/remove"; id: string }
   | { type: "document/rename"; title: string };
 
 function commitDocument(
@@ -80,6 +87,10 @@ export function applyDocumentCommand(
         {
           objects,
           order: document.order.filter((id) => !removedIds.has(id)),
+          connections: document.connections.filter(
+            ({ from, to }) =>
+              !removedIds.has(from.objectId) && !removedIds.has(to.objectId),
+          ),
         },
         occurredAt,
       );
@@ -102,6 +113,61 @@ export function applyDocumentCommand(
         { order: [...command.order] },
         occurredAt,
       );
+    }
+
+    case "connection/add": {
+      const { connection } = command;
+      if (
+        document.connections.some(({ id }) => id === connection.id) ||
+        connection.from.objectId === connection.to.objectId ||
+        !document.objects[connection.from.objectId] ||
+        !document.objects[connection.to.objectId]
+      ) {
+        return document;
+      }
+
+      return commitDocument(
+        document,
+        { connections: [...document.connections, connection] },
+        occurredAt,
+      );
+    }
+
+    case "connection/update": {
+      const { connection } = command;
+      const index = document.connections.findIndex(
+        ({ id }) => id === connection.id,
+      );
+      if (
+        index === -1 ||
+        connection.from.objectId === connection.to.objectId ||
+        !document.objects[connection.from.objectId] ||
+        !document.objects[connection.to.objectId]
+      ) {
+        return document;
+      }
+
+      const current = document.connections[index];
+      if (
+        current.from.objectId === connection.from.objectId &&
+        current.from.edge === connection.from.edge &&
+        current.to.objectId === connection.to.objectId &&
+        current.to.edge === connection.to.edge
+      ) {
+        return document;
+      }
+
+      const connections = [...document.connections];
+      connections[index] = connection;
+      return commitDocument(document, { connections }, occurredAt);
+    }
+
+    case "connection/remove": {
+      const connections = document.connections.filter(
+        ({ id }) => id !== command.id,
+      );
+      if (connections.length === document.connections.length) return document;
+      return commitDocument(document, { connections }, occurredAt);
     }
 
     case "document/rename": {
