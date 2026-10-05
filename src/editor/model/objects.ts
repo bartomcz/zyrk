@@ -1,4 +1,16 @@
 export type ObjectId = string;
+export type ObjectEdge = "top" | "right" | "bottom" | "left";
+
+export type ConnectionEndpoint = {
+  objectId: ObjectId;
+  edge: ObjectEdge;
+};
+
+export type CanvasConnection = {
+  id: string;
+  from: ConnectionEndpoint;
+  to: ConnectionEndpoint;
+};
 
 export type TextAlignment = "left" | "center" | "right";
 

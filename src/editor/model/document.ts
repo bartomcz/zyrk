@@ -1,6 +1,11 @@
-import { createObjectId, type CanvasObject, type ObjectId } from "./objects";
+import {
+  createObjectId,
+  type CanvasConnection,
+  type CanvasObject,
+  type ObjectId,
+} from "./objects";
 
-export const DOCUMENT_SCHEMA_VERSION = 1 as const;
+export const DOCUMENT_SCHEMA_VERSION = 2 as const;
 
 export type CanvasDocument = {
   schemaVersion: typeof DOCUMENT_SCHEMA_VERSION;
@@ -11,6 +16,7 @@ export type CanvasDocument = {
   updatedAt: string;
   objects: Record<ObjectId, CanvasObject>;
   order: ObjectId[];
+  connections: CanvasConnection[];
 };
 
 export function createCanvasDocument(
@@ -30,6 +36,7 @@ export function createCanvasDocument(
       initialObjects.map((object) => [object.id, object]),
     ),
     order: initialObjects.map((object) => object.id),
+    connections: [],
   };
 }
 
