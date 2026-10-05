@@ -32,6 +32,8 @@ export function EditorOverlay({
   const sharedProps = {
     className: "canvas-text-editor",
     "aria-label": `Edit ${object.type}`,
+    autoCorrect: "off",
+    spellCheck: false,
     value: textEditor.getValue(object),
     style: {
       left: view.x + object.x * view.scale,
