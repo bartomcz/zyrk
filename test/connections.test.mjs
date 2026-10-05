@@ -52,9 +52,7 @@ test("connections snap to edges, persist, and are removed with an endpoint", asy
       to: { objectId: target.id, edge: "left" },
     };
     let document = createCanvasDocument([source, target]);
-    const versionOneDocument = { ...document, schemaVersion: 1 };
-    delete versionOneDocument.connections;
-    assert.deepEqual(parseCanvasDocumentValue(versionOneDocument).connections, []);
+    assert.equal(document.schemaVersion, 1);
 
     document = applyDocumentCommand(
       document,
@@ -62,6 +60,7 @@ test("connections snap to edges, persist, and are removed with an endpoint", asy
       "2026-01-01T00:00:01.000Z",
     );
     assert.deepEqual(document.connections, [connection]);
+    assert.deepEqual(parseCanvasDocumentValue(document).connections, [connection]);
 
     const movedConnection = {
       ...connection,

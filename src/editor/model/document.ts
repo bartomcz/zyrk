@@ -5,7 +5,7 @@ import {
   type ObjectId,
 } from "./objects";
 
-export const DOCUMENT_SCHEMA_VERSION = 2 as const;
+export const DOCUMENT_SCHEMA_VERSION = 1 as const;
 
 export type CanvasDocument = {
   schemaVersion: typeof DOCUMENT_SCHEMA_VERSION;

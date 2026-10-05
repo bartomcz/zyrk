@@ -26,7 +26,7 @@ src-tauri/
 
 `src/editor/model/document.ts` defines the serializable `CanvasDocument`:
 
-- `schemaVersion` supports future migrations;
+- `schemaVersion` is fixed at `1`; add migrations only when compatibility is needed;
 - `id`, timestamps, and a monotonically changing `revision` identify state;
 - `objects` stores normalized objects by stable UUID;
 - `order` controls object rendering and future layer ordering;
@@ -107,9 +107,9 @@ text style and mutation behavior.
 ## JSON files
 
 `model/schema.ts` validates every loaded document before it reaches editor
-state. Unknown versions, unknown object types, invalid geometry, duplicate
-ordering, and incomplete object maps are rejected. Migration routing is
-centralized beside this validation for future schema versions.
+state. Documents currently require schema version `1`; unknown versions,
+unknown object types, invalid geometry, duplicate ordering, and incomplete
+object maps are rejected.
 
 `persistence/documentRepository.ts` exposes a repository rather than coupling
 file operations to React. In Tauri, native dialogs open documents and choose a

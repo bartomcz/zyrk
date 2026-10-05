@@ -174,29 +174,17 @@ function parseCanvasObject(value: unknown, path: string): CanvasObject {
   }
 }
 
-function migrateDocumentValue(value: unknown): unknown {
+export function parseCanvasDocumentValue(value: unknown): CanvasDocument {
   const candidate = record(value, "document");
   const version = nonNegativeInteger(
     candidate.schemaVersion,
     "document.schemaVersion",
   );
-
-  if (version === DOCUMENT_SCHEMA_VERSION) return candidate;
-  if (version === 1) {
-    return {
-      ...candidate,
-      schemaVersion: DOCUMENT_SCHEMA_VERSION,
-      connections: [],
-    };
+  if (version !== DOCUMENT_SCHEMA_VERSION) {
+    throw new InvalidDocumentError(
+      `Document schema version ${version} is not supported`,
+    );
   }
-
-  throw new InvalidDocumentError(
-    `Document schema version ${version} is not supported`,
-  );
-}
-
-export function parseCanvasDocumentValue(value: unknown): CanvasDocument {
-  const candidate = record(migrateDocumentValue(value), "document");
   const objectValues = record(candidate.objects, "document.objects");
   const objects: Record<string, CanvasObject> = {};
 
