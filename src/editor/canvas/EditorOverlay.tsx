@@ -18,7 +18,7 @@ export function EditorOverlay({
   onFinish,
   onCancel,
 }: EditorOverlayProps) {
-  const editorRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const definition = getObjectDefinition(object);
   const textEditor = definition.textEditor;
 
@@ -41,41 +41,16 @@ export function EditorOverlay({
       transform: `scale(${view.scale}) rotate(${object.rotation}deg)`,
       ...textEditor.getStyle(object),
     },
-    onChange: (
-      event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => onChange(event.target.value),
+    onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) =>
+      onChange(event.target.value),
     onBlur: onFinish,
-    onKeyDown: (
-      event: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>,
-    ) => {
+    onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key === "Escape") {
         event.preventDefault();
         onCancel();
       }
-      if (event.key === "Enter" && !textEditor.multiline) {
-        event.preventDefault();
-        onFinish();
-      }
     },
   };
 
-  if (textEditor.multiline) {
-    return (
-      <textarea
-        {...sharedProps}
-        ref={(element) => {
-          editorRef.current = element;
-        }}
-      />
-    );
-  }
-
-  return (
-    <input
-      {...sharedProps}
-      ref={(element) => {
-        editorRef.current = element;
-      }}
-    />
-  );
+  return <textarea {...sharedProps} ref={editorRef} />;
 }

@@ -12,13 +12,6 @@ export type RecoverySnapshot = {
   document: CanvasDocument;
 };
 
-export type RecoveryRepository = {
-  loadCached: () => RecoverySnapshot | null;
-  load: () => Promise<RecoverySnapshot | null>;
-  save: (snapshot: RecoverySnapshot) => Promise<boolean>;
-  clear: () => Promise<void>;
-};
-
 function parseRecoverySnapshot(value: unknown): RecoverySnapshot {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("Invalid recovery snapshot");
@@ -121,7 +114,7 @@ function queueNativeRecovery(snapshot: RecoverySnapshot): Promise<void> {
   return nativeWriter;
 }
 
-export const recoveryRepository: RecoveryRepository = {
+export const recoveryRepository = {
   loadCached: loadCachedRecovery,
 
   load: async () => {
@@ -141,7 +134,7 @@ export const recoveryRepository: RecoveryRepository = {
     }
   },
 
-  save: async (snapshot) => {
+  save: async (snapshot: RecoverySnapshot) => {
     const cached = cacheRecovery(snapshot);
     if (!isTauri()) return cached;
 
@@ -150,18 +143,6 @@ export const recoveryRepository: RecoveryRepository = {
       return true;
     } catch {
       return cached;
-    }
-  },
-
-  clear: async () => {
-    try {
-      window.localStorage.removeItem(RECOVERY_KEY);
-    } catch {
-      // Continue so the native recovery files can still be cleared.
-    }
-
-    if (isTauri()) {
-      await invoke("clear_recovery_snapshots");
     }
   },
 };

@@ -19,7 +19,6 @@ export type ObjectRendererProps<TObject extends CanvasObject> = {
 };
 
 export type TextEditorBehavior<TObject extends CanvasObject> = {
-  multiline: boolean;
   emptyValue: string;
   resizeBehavior: "scale" | "fixed";
   getValue: (object: TObject) => string;
@@ -33,8 +32,6 @@ export type CanvasObjectDefinition<TObject extends CanvasObject> = {
   transform: {
     minWidth: number;
     minHeight: number;
-    canResize: boolean;
-    canRotate: boolean;
     keepRatio: boolean;
     withFrame: (object: TObject, frame: ObjectFrame) => TObject;
   };

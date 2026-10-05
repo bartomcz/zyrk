@@ -5,22 +5,9 @@ import {
   serializeCanvasDocument,
 } from "../model/schema";
 
-export type OpenedDocument = {
+type OpenedDocument = {
   document: CanvasDocument;
   path: string | null;
-};
-
-export type SaveResult = {
-  saved: boolean;
-  path: string | null;
-};
-
-export type DocumentFileRepository = {
-  open: () => Promise<OpenedDocument | null>;
-  save: (
-    document: CanvasDocument,
-    path: string | null,
-  ) => Promise<SaveResult>;
 };
 
 function safeFilename(title: string): string {
@@ -77,7 +64,7 @@ function openInBrowser(): Promise<OpenedDocument | null> {
   });
 }
 
-function saveInBrowser(document: CanvasDocument): SaveResult {
+function saveInBrowser(document: CanvasDocument) {
   const blob = new Blob([serializeCanvasDocument(document)], {
     type: "application/json",
   });
@@ -92,7 +79,7 @@ function saveInBrowser(document: CanvasDocument): SaveResult {
   return { saved: true, path: null };
 }
 
-export const documentFileRepository: DocumentFileRepository = {
+export const documentFileRepository = {
   open: async () => {
     if (!isTauri()) return openInBrowser();
 
@@ -102,7 +89,7 @@ export const documentFileRepository: DocumentFileRepository = {
       : null;
   },
 
-  save: async (document, path) => {
+  save: async (document: CanvasDocument, path: string | null) => {
     if (!isTauri()) return saveInBrowser(document);
 
     const savedPath = await invoke<string | null>("save_document", {

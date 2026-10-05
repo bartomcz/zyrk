@@ -1,7 +1,4 @@
-import {
-  restoreDocumentContent,
-  type CanvasDocument,
-} from "../model/document";
+import type { CanvasDocument } from "../model/document";
 import { applyDocumentCommand, type DocumentCommand } from "./commands";
 
 const MAX_HISTORY_ENTRIES = 100;
@@ -55,11 +52,11 @@ function restoredFrom(
   current: CanvasDocument,
   occurredAt: string,
 ): CanvasDocument {
-  return restoreDocumentContent(
-    snapshot,
-    current.revision + 1,
-    occurredAt,
-  );
+  return {
+    ...snapshot,
+    revision: current.revision + 1,
+    updatedAt: occurredAt,
+  };
 }
 
 export function documentHistoryReducer(

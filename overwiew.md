@@ -47,7 +47,7 @@ object definition supplies:
 
 - a default factory;
 - its Konva renderer;
-- minimum dimensions and resize/rotation capabilities;
+- minimum dimensions and resize behavior;
 - a function that applies a normalized frame;
 - optional text-editor behavior.
 
@@ -73,7 +73,7 @@ not separately selectable rectangle and text objects.
 ## Commands and undo/redo
 
 All document changes pass through `state/commands.ts`. The supported command
-families already cover adding, updating, removing, reordering, and renaming.
+families already cover adding, updating, removing, and renaming.
 
 `state/history.ts` wraps the document in `past`, `present`, and `future`
 snapshots, capped at 100 undo entries. Documents are small JSON values, so
@@ -100,9 +100,8 @@ be converted from temporary node scale into persisted width, height, and
 rotation. Per-type transform policies can then handle arrows or constrained
 shapes differently.
 
-`canvas/EditorOverlay.tsx` hosts DOM-based text editing. Definitions decide
-whether editing is single-line or multiline and provide the object-specific
-text style and mutation behavior.
+`canvas/EditorOverlay.tsx` hosts DOM-based multiline text editing. Definitions
+provide the object-specific text style and mutation behavior.
 
 ## JSON files
 

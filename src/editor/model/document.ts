@@ -39,15 +39,3 @@ export function createCanvasDocument(
     connections: [],
   };
 }
-
-export function restoreDocumentContent(
-  snapshot: CanvasDocument,
-  revision: number,
-  updatedAt: string,
-): CanvasDocument {
-  return {
-    ...snapshot,
-    revision,
-    updatedAt,
-  };
-}

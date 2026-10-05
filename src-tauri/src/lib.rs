@@ -105,10 +105,7 @@ fn save_recovery_snapshot(app: tauri::AppHandle, snapshot: String) -> Result<(),
     };
     let temporary = directory.join("recovery-next.tmp");
 
-    let mut file = File::create(&temporary).map_err(|error| error.to_string())?;
-    file.write_all(snapshot.as_bytes())
-        .map_err(|error| error.to_string())?;
-    file.sync_all().map_err(|error| error.to_string())?;
+    write_document(&temporary, &snapshot)?;
 
     #[cfg(target_os = "windows")]
     if target.exists() {
@@ -125,18 +122,6 @@ fn save_recovery_snapshot(app: tauri::AppHandle, snapshot: String) -> Result<(),
     Ok(())
 }
 
-#[tauri::command]
-fn clear_recovery_snapshots(app: tauri::AppHandle) -> Result<(), String> {
-    let directory = recovery_directory(&app)?;
-    for filename in RECOVERY_FILENAMES {
-        let path = directory.join(filename);
-        if path.exists() {
-            fs::remove_file(path).map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -145,8 +130,7 @@ pub fn run() {
             open_document,
             save_document,
             load_recovery_snapshots,
-            save_recovery_snapshot,
-            clear_recovery_snapshots
+            save_recovery_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

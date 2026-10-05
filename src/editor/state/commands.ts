@@ -9,7 +9,6 @@ export type DocumentCommand =
   | { type: "object/add"; object: CanvasObject; index?: number }
   | { type: "object/update"; object: CanvasObject }
   | { type: "object/remove"; ids: ObjectId[] }
-  | { type: "object/reorder"; order: ObjectId[] }
   | { type: "connection/add"; connection: CanvasConnection }
   | { type: "connection/update"; connection: CanvasConnection }
   | { type: "connection/remove"; id: string }
@@ -92,25 +91,6 @@ export function applyDocumentCommand(
               !removedIds.has(from.objectId) && !removedIds.has(to.objectId),
           ),
         },
-        occurredAt,
-      );
-    }
-
-    case "object/reorder": {
-      const currentIds = new Set(document.order);
-      const nextIds = new Set(command.order);
-      const isValid =
-        command.order.length === document.order.length &&
-        nextIds.size === currentIds.size &&
-        command.order.every((id) => currentIds.has(id));
-      const isUnchanged = command.order.every(
-        (id, index) => id === document.order[index],
-      );
-      if (!isValid || isUnchanged) return document;
-
-      return commitDocument(
-        document,
-        { order: [...command.order] },
         occurredAt,
       );
     }

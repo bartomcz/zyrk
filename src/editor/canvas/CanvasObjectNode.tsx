@@ -188,8 +188,7 @@ export function CanvasObjectNode({
         <>
           <Transformer
             ref={transformerRef}
-            resizeEnabled={definition.transform.canResize}
-            rotateEnabled={definition.transform.canRotate}
+            rotateEnabled={false}
             keepRatio={definition.transform.keepRatio}
             enabledAnchors={[
               "top-left",

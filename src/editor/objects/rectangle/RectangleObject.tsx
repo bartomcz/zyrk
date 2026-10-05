@@ -60,13 +60,10 @@ export const rectangleObjectDefinition: CanvasObjectDefinition<RectangleObject> 
     transform: {
       minWidth: 20,
       minHeight: 20,
-      canResize: true,
-      canRotate: false,
       keepRatio: false,
       withFrame: (object, frame) => ({ ...object, ...frame }),
     },
     textEditor: {
-      multiline: true,
       emptyValue: "",
       resizeBehavior: "fixed",
       getValue: (object) => object.text,

@@ -83,14 +83,8 @@ export function CanvasStage({
     });
   };
 
-  const getWorldPointer = (stage: Konva.Stage | null): CanvasPoint | null => {
-    const pointer = stage?.getPointerPosition();
-    if (!stage || !pointer) return null;
-    return {
-      x: (pointer.x - stage.x()) / stage.scaleX(),
-      y: (pointer.y - stage.y()) / stage.scaleY(),
-    };
-  };
+  const getWorldPointer = (stage: Konva.Stage | null): CanvasPoint | null =>
+    stage?.getRelativePointerPosition() ?? null;
 
   const getConnectionPoints = (connection: CanvasConnection) => {
     const fromObject = document.objects[connection.from.objectId];
