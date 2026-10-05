@@ -6,7 +6,7 @@ import type { CanvasView } from "./CanvasStage";
 type EditorOverlayProps = {
   object: CanvasObject;
   view: CanvasView;
-  onChange: (value: string) => void;
+  onChange: (value: string, contentHeight: number) => void;
   onFinish: () => void;
   onCancel: () => void;
 };
@@ -43,8 +43,15 @@ export function EditorOverlay({
       transform: `scale(${view.scale}) rotate(${object.rotation}deg)`,
       ...textEditor.getStyle(object),
     },
-    onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) =>
-      onChange(event.target.value),
+    onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const editor = event.currentTarget;
+      const height = editor.style.height;
+      const borderHeight = editor.offsetHeight - editor.clientHeight;
+      editor.style.height = "0";
+      const contentHeight = editor.scrollHeight + borderHeight;
+      editor.style.height = height;
+      onChange(editor.value, contentHeight);
+    },
     onBlur: onFinish,
     onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
       if (event.key === "Escape") {

@@ -206,17 +206,28 @@ export default function App() {
     });
   };
 
-  const updateEditedText = (value: string) => {
+  const updateEditedText = (value: string, contentHeight: number) => {
     if (!editing) return;
     const object = document.objects[editing.objectId];
     if (!object) return;
-    const textEditor = getObjectDefinition(object).textEditor;
+    const definition = getObjectDefinition(object);
+    const textEditor = definition.textEditor;
     if (!textEditor) return;
 
+    const updatedObject = textEditor.withValue(object, value);
     applyCommand(
       {
         type: "object/update",
-        object: textEditor.withValue(object, value),
+        object:
+          object.type === "text"
+            ? {
+                ...updatedObject,
+                height: Math.max(
+                  definition.transform.minHeight,
+                  contentHeight,
+                ),
+              }
+            : updatedObject,
       },
       editing.historyGroupKey,
     );
@@ -228,13 +239,17 @@ export default function App() {
     if (object) {
       const textEditor = getObjectDefinition(object).textEditor;
       if (textEditor) {
-        const value =
-          textEditor.getValue(object).trim() || textEditor.emptyValue;
+        const value = textEditor.getValue(object).trim();
         applyCommand(
-          {
-            type: "object/update",
-            object: textEditor.withValue(object, value),
-          },
+          object.type === "text" && !value
+            ? { type: "object/remove", ids: [object.id] }
+            : {
+                type: "object/update",
+                object: textEditor.withValue(
+                  object,
+                  value || textEditor.emptyValue,
+                ),
+              },
           editing.historyGroupKey,
         );
       }
