@@ -40,11 +40,11 @@ function RectangleObjectRenderer({
 
 export const rectangleObjectDefinition: CanvasObjectDefinition<RectangleObject> =
   {
-    create: ({ id, center, offset }) => ({
+    create: ({ id, center }) => ({
       id,
       type: "rectangle",
-      x: center.x - DEFAULT_WIDTH / 2 + offset,
-      y: center.y - DEFAULT_HEIGHT / 2 + offset,
+      x: center.x - DEFAULT_WIDTH / 2,
+      y: center.y - DEFAULT_HEIGHT / 2,
       width: DEFAULT_WIDTH,
       height: DEFAULT_HEIGHT,
       rotation: 0,

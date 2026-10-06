@@ -31,6 +31,7 @@ type CanvasStageProps = {
   selectedConnectionId: string | null;
   editingObjectId: ObjectId | null;
   onViewChange: (view: CanvasView) => void;
+  onPlaceObject?: (point: CanvasPoint) => void;
   onSelectObject: (id: ObjectId | null) => void;
   onSelectConnection: (id: string) => void;
   onBeginEditing: (id: ObjectId) => void;
@@ -47,6 +48,7 @@ export function CanvasStage({
   selectedConnectionId,
   editingObjectId,
   onViewChange,
+  onPlaceObject,
   onSelectObject,
   onSelectConnection,
   onBeginEditing,
@@ -105,6 +107,15 @@ export function CanvasStage({
           ? moving.pointer
           : getEdgePoint(displayedObject(toObject), connection.to.edge),
     };
+  };
+
+  const handleCanvasPress = (event: Konva.KonvaEventObject<Event>) => {
+    if (onPlaceObject) {
+      const pointer = getWorldPointer(event.target.getStage());
+      if (pointer) onPlaceObject(pointer);
+    } else if (event.target === event.currentTarget) {
+      onSelectObject(null);
+    }
   };
 
   const selectedConnection = document.connections.find(
@@ -191,12 +202,8 @@ export function CanvasStage({
         }
         setPendingConnection(null);
       }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) onSelectObject(null);
-      }}
-      onTap={(event) => {
-        if (event.target === event.currentTarget) onSelectObject(null);
-      }}
+      onClick={handleCanvasPress}
+      onTap={handleCanvasPress}
     >
       <Layer listening={false}>
         <Shape

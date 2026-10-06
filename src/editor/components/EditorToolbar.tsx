@@ -1,10 +1,13 @@
+import type { CanvasObjectType } from "../model/objects";
+
 type EditorToolbarProps = {
   canUndo: boolean;
   canRedo: boolean;
   isDirty: boolean;
+  activeObjectType: CanvasObjectType | null;
   onNew: () => void;
-  onAddText: () => void;
-  onAddRectangle: () => void;
+  onSelectText: () => void;
+  onSelectRectangle: () => void;
   onUndo: () => void;
   onRedo: () => void;
   onOpen: () => void;
@@ -16,9 +19,10 @@ export function EditorToolbar({
   canUndo,
   canRedo,
   isDirty,
+  activeObjectType,
   onNew,
-  onAddText,
-  onAddRectangle,
+  onSelectText,
+  onSelectRectangle,
   onUndo,
   onRedo,
   onOpen,
@@ -31,8 +35,9 @@ export function EditorToolbar({
         className="tool-button"
         type="button"
         aria-label="Add text"
+        aria-pressed={activeObjectType === "text"}
         title="Add text"
-        onClick={onAddText}
+        onClick={onSelectText}
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
           <path d="M5 5h14M12 5v14M8.5 19h7" />
@@ -43,8 +48,9 @@ export function EditorToolbar({
         className="tool-button"
         type="button"
         aria-label="Add rectangle"
+        aria-pressed={activeObjectType === "rectangle"}
         title="Add rectangle"
-        onClick={onAddRectangle}
+        onClick={onSelectRectangle}
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
           <path d="M4 6h16v12H4Z" />

@@ -63,6 +63,11 @@ main {
   background: #f0f1f3;
 }
 
+.tool-button[aria-pressed="true"] {
+  color: #4f46e5;
+  background: #eef2ff;
+}
+
 .tool-button:active {
   background: #e4e6e9;
   transform: translateY(1px);

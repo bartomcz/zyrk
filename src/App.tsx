@@ -55,6 +55,8 @@ export default function App() {
     string | null
   >(null);
   const [editing, setEditing] = useState<EditingSession | null>(null);
+  const [pendingObjectType, setPendingObjectType] =
+    useState<CanvasObjectType | null>(null);
 
   const editedObject = editing
     ? document.objects[editing.objectId]
@@ -91,6 +93,11 @@ export default function App() {
 
   useEffect(() => {
     const handleEditorShortcut = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && pendingObjectType) {
+        event.preventDefault();
+        setPendingObjectType(null);
+        return;
+      }
       if (editing || (!selectedObjectId && !selectedConnectionId)) return;
 
       if (event.key === "Backspace") {
@@ -138,6 +145,7 @@ export default function App() {
     document.objects,
     document.order,
     editing,
+    pendingObjectType,
     selectedConnectionId,
     selectedObjectId,
   ]);
@@ -156,24 +164,27 @@ export default function App() {
     setSelectedObjectId(null);
     setSelectedConnectionId(null);
     setEditing(null);
+    setPendingObjectType(null);
     setView({ x: size.width / 2, y: size.height / 2, scale: 1 });
   };
 
-  const addObject = (type: CanvasObjectType) => {
-    const offset = ((document.order.length - 1) % 6) * 12;
-    const center = {
-      x: (size.width / 2 - view.x) / view.scale,
-      y: (size.height / 2 - view.y) / view.scale,
-    };
-    const object = createCanvasObject(type, {
+  const selectObjectTool = (type: CanvasObjectType) => {
+    setPendingObjectType(type);
+    setSelectedObjectId(null);
+    setSelectedConnectionId(null);
+  };
+
+  const placeObject = (center: { x: number; y: number }) => {
+    if (!pendingObjectType) return;
+    const object = createCanvasObject(pendingObjectType, {
       id: createObjectId(),
       center,
-      offset,
     });
 
     applyCommand({ type: "object/add", object });
     setSelectedObjectId(object.id);
     setSelectedConnectionId(null);
+    setPendingObjectType(null);
   };
 
   const updateObject = (object: CanvasObject) => {
@@ -272,6 +283,7 @@ export default function App() {
       setSelectedObjectId(null);
       setSelectedConnectionId(null);
       setEditing(null);
+      setPendingObjectType(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       window.alert(`Could not open the document: ${message}`);
@@ -301,6 +313,7 @@ export default function App() {
         selectedConnectionId={selectedConnectionId}
         editingObjectId={editing?.objectId ?? null}
         onViewChange={setView}
+        onPlaceObject={pendingObjectType ? placeObject : undefined}
         onSelectObject={(id) => {
           setSelectedObjectId(id);
           setSelectedConnectionId(null);
@@ -329,9 +342,10 @@ export default function App() {
         canUndo={canUndo}
         canRedo={canRedo}
         isDirty={isDirty}
+        activeObjectType={pendingObjectType}
         onNew={newDocument}
-        onAddText={() => addObject("text")}
-        onAddRectangle={() => addObject("rectangle")}
+        onSelectText={() => selectObjectTool("text")}
+        onSelectRectangle={() => selectObjectTool("rectangle")}
         onUndo={undo}
         onRedo={redo}
         onOpen={() => void openDocument()}

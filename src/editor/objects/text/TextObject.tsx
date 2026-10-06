@@ -30,12 +30,12 @@ function TextObjectRenderer({
 }
 
 export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
-  create: ({ id, center, offset }) => ({
+  create: ({ id, center }) => ({
     id,
     type: "text",
     text: "Text",
-    x: center.x - DEFAULT_TEXT_WIDTH / 2 + offset,
-    y: center.y - DEFAULT_TEXT_HEIGHT / 2 + offset,
+    x: center.x - DEFAULT_TEXT_WIDTH / 2,
+    y: center.y - DEFAULT_TEXT_HEIGHT / 2,
     width: DEFAULT_TEXT_WIDTH,
     height: DEFAULT_TEXT_HEIGHT,
     rotation: 0,

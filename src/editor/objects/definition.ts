@@ -10,7 +10,6 @@ import type {
 export type CreateObjectContext = {
   id: ObjectId;
   center: { x: number; y: number };
-  offset: number;
 };
 
 export type ObjectRendererProps<TObject extends CanvasObject> = {
