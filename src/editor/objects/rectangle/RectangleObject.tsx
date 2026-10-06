@@ -1,8 +1,9 @@
 import { Rect, Text } from "react-konva";
 import type { RectangleObject } from "../../model/objects";
-import type {
-  CanvasObjectDefinition,
-  ObjectRendererProps,
+import {
+  EDITABLE_TEXT_NODE_NAME,
+  type CanvasObjectDefinition,
+  type ObjectRendererProps,
 } from "../definition";
 
 const DEFAULT_WIDTH = 180;
@@ -23,7 +24,7 @@ function RectangleObjectRenderer({
         strokeScaleEnabled={false}
       />
       <Text
-        name="editable-text"
+        name={EDITABLE_TEXT_NODE_NAME}
         text={object.text}
         width={object.width}
         height={object.height}
@@ -61,14 +62,17 @@ export const rectangleObjectDefinition: CanvasObjectDefinition<RectangleObject> 
       minWidth: 20,
       minHeight: 20,
       keepRatio: false,
+      textResize: "preserve-font-size",
       withFrame: (object, frame) => ({ ...object, ...frame }),
     },
     textEditor: {
-      emptyValue: "",
-      resizeBehavior: "fixed",
       getValue: (object) => object.text,
-      withValue: (object, value) =>
+      update: (object, value) =>
         value === object.text ? object : { ...object, text: value },
+      finish: (object) => {
+        const text = object.text.trim();
+        return text === object.text ? object : { ...object, text };
+      },
       getStyle: (object) => ({
         color: object.textColor,
         fontFamily: object.fontFamily,

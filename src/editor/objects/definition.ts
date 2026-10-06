@@ -7,6 +7,8 @@ import type {
   ObjectId,
 } from "../model/objects";
 
+export const EDITABLE_TEXT_NODE_NAME = "editable-text";
+
 export type CreateObjectContext = {
   id: ObjectId;
   center: { x: number; y: number };
@@ -18,10 +20,13 @@ export type ObjectRendererProps<TObject extends CanvasObject> = {
 };
 
 export type TextEditorBehavior<TObject extends CanvasObject> = {
-  emptyValue: string;
-  resizeBehavior: "scale" | "fixed";
   getValue: (object: TObject) => string;
-  withValue: (object: TObject, value: string) => TObject;
+  update: (
+    object: TObject,
+    value: string,
+    contentHeight: number,
+  ) => TObject;
+  finish: (object: TObject) => TObject | null;
   getStyle: (object: TObject) => CSSProperties;
 };
 
@@ -32,6 +37,7 @@ export type CanvasObjectDefinition<TObject extends CanvasObject> = {
     minWidth: number;
     minHeight: number;
     keepRatio: boolean;
+    textResize?: "reflow-horizontal" | "preserve-font-size";
     withFrame: (object: TObject, frame: ObjectFrame) => TObject;
   };
   textEditor?: TextEditorBehavior<TObject>;

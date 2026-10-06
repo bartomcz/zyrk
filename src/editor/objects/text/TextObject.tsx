@@ -1,13 +1,16 @@
 import { Text } from "react-konva";
 import type { TextObject } from "../../model/objects";
-import type {
-  CanvasObjectDefinition,
-  ObjectRendererProps,
+import {
+  EDITABLE_TEXT_NODE_NAME,
+  type CanvasObjectDefinition,
+  type ObjectRendererProps,
 } from "../definition";
 
 export const DEFAULT_TEXT_WIDTH = 240;
 export const DEFAULT_TEXT_HEIGHT = 44;
 export const DEFAULT_TEXT_FONT_SIZE = 28;
+const MIN_TEXT_WIDTH = 40;
+const MIN_TEXT_HEIGHT = 24;
 
 function TextObjectRenderer({
   object,
@@ -15,7 +18,7 @@ function TextObjectRenderer({
 }: ObjectRendererProps<TextObject>) {
   return (
     <Text
-      name="editable-text"
+      name={EDITABLE_TEXT_NODE_NAME}
       text={object.text}
       width={object.width}
       height={object.height}
@@ -46,9 +49,10 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
   }),
   Renderer: TextObjectRenderer,
   transform: {
-    minWidth: 40,
-    minHeight: 24,
+    minWidth: MIN_TEXT_WIDTH,
+    minHeight: MIN_TEXT_HEIGHT,
     keepRatio: true,
+    textResize: "reflow-horizontal",
     withFrame: (object, frame) => ({
       ...object,
       ...frame,
@@ -56,11 +60,18 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
     }),
   },
   textEditor: {
-    emptyValue: "Text",
-    resizeBehavior: "scale",
     getValue: (object) => object.text,
-    withValue: (object, value) =>
-      value === object.text ? object : { ...object, text: value },
+    update: (object, value, contentHeight) => {
+      const height = Math.max(MIN_TEXT_HEIGHT, contentHeight);
+      return value === object.text && height === object.height
+        ? object
+        : { ...object, text: value, height };
+    },
+    finish: (object) => {
+      const text = object.text.trim();
+      if (!text) return null;
+      return text === object.text ? object : { ...object, text };
+    },
     getStyle: (object) => ({
       color: object.textColor,
       fontFamily: object.fontFamily,

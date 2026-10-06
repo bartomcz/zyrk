@@ -1,5 +1,5 @@
 import type Konva from "konva";
-import { useLayoutEffect, useRef } from "react";
+import { useRef } from "react";
 import { Circle, Group, Transformer } from "react-konva";
 import type {
   CanvasObject,
@@ -9,6 +9,7 @@ import type {
 } from "../model/objects";
 import { getObjectDefinition } from "../objects/registry";
 import { getEdgePoint, OBJECT_EDGES } from "./connections";
+import { useObjectTransform } from "./useObjectTransform";
 
 type CanvasObjectNodeProps = {
   object: CanvasObject;
@@ -46,36 +47,24 @@ export function CanvasObjectNode({
   const definition = getObjectDefinition(object);
   const Renderer = definition.Renderer;
   const objectRef = useRef<Konva.Group>(null);
-  const transformerRef = useRef<Konva.Transformer>(null);
-  const horizontalResizeRef = useRef(false);
-  const resizedWidthRef = useRef<number | null>(null);
-
-  useLayoutEffect(() => {
-    if (selected && !editing && objectRef.current && transformerRef.current) {
-      transformerRef.current.nodes([objectRef.current]);
-      transformerRef.current.forceUpdate();
-    }
-  }, [editing, object, selected]);
+  const {
+    transformerRef,
+    onTransformStart,
+    onTransform,
+    onTransformEnd,
+  } = useObjectTransform({
+    object,
+    objectRef,
+    definition,
+    selected,
+    editing,
+    onPreviewFrame,
+    onChange,
+  });
 
   const updateFrame = (frame: ObjectFrame) => {
     onChange(definition.transform.withFrame(object, frame));
   };
-
-  const transformedFrame = (node: Konva.Group): ObjectFrame => ({
-    x: node.x(),
-    y: node.y(),
-    width: horizontalResizeRef.current
-      ? (resizedWidthRef.current ?? object.width)
-      : Math.max(
-          definition.transform.minWidth,
-          object.width * Math.abs(node.scaleX()),
-        ),
-    height: Math.max(
-      definition.transform.minHeight,
-      object.height * Math.abs(node.scaleY()),
-    ),
-    rotation: node.rotation(),
-  });
 
   const displayedObject: CanvasObject = liveFrame
     ? { ...object, ...liveFrame }
@@ -126,55 +115,10 @@ export function CanvasObjectNode({
           updateFrame(frame);
           setCanvasCursor(event, "move");
         }}
-        onTransformStart={() => {
-          const anchor = transformerRef.current?.getActiveAnchor();
-          horizontalResizeRef.current =
-            (anchor === "middle-left" || anchor === "middle-right") &&
-            definition.textEditor?.resizeBehavior === "scale";
-          resizedWidthRef.current = null;
-        }}
-        onTransform={() => {
-          const node = objectRef.current;
-          const text = node?.findOne<Konva.Text>(".editable-text");
-          if (!node) return;
-
-          if (text && horizontalResizeRef.current) {
-            const width = Math.max(
-              definition.transform.minWidth,
-              text.width() * Math.abs(node.scaleX()),
-            );
-            text.width(width);
-            node.scaleX(1);
-            resizedWidthRef.current = width;
-            transformerRef.current?.forceUpdate();
-          } else if (text && definition.textEditor?.resizeBehavior === "fixed") {
-            const scaleX = Math.abs(node.scaleX());
-            const scaleY = Math.abs(node.scaleY());
-            if (scaleX && scaleY) {
-              text.width(object.width * scaleX);
-              text.height(object.height * scaleY);
-              text.scale({ x: 1 / scaleX, y: 1 / scaleY });
-            }
-          }
-
-          onPreviewFrame(object.id, transformedFrame(node));
-        }}
+        onTransformStart={onTransformStart}
+        onTransform={onTransform}
         onTransformEnd={(event) => {
-          const node = objectRef.current;
-          if (!node) return;
-          const frame = transformedFrame(node);
-
-          node.scaleX(1);
-          node.scaleY(1);
-          if (definition.textEditor?.resizeBehavior === "fixed") {
-            objectRef.current
-              ?.findOne<Konva.Text>(".editable-text")
-              ?.scale({ x: 1, y: 1 });
-          }
-          horizontalResizeRef.current = false;
-          resizedWidthRef.current = null;
-          onPreviewFrame(object.id, null);
-          updateFrame(frame);
+          onTransformEnd();
           setCanvasCursor(event, "move");
         }}
         onMouseEnter={(event) =>

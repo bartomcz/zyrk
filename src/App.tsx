@@ -225,20 +225,10 @@ export default function App() {
     const textEditor = definition.textEditor;
     if (!textEditor) return;
 
-    const updatedObject = textEditor.withValue(object, value);
     applyCommand(
       {
         type: "object/update",
-        object:
-          object.type === "text"
-            ? {
-                ...updatedObject,
-                height: Math.max(
-                  definition.transform.minHeight,
-                  contentHeight,
-                ),
-              }
-            : updatedObject,
+        object: textEditor.update(object, value, contentHeight),
       },
       editing.historyGroupKey,
     );
@@ -250,17 +240,11 @@ export default function App() {
     if (object) {
       const textEditor = getObjectDefinition(object).textEditor;
       if (textEditor) {
-        const value = textEditor.getValue(object).trim();
+        const finishedObject = textEditor.finish(object);
         applyCommand(
-          object.type === "text" && !value
-            ? { type: "object/remove", ids: [object.id] }
-            : {
-                type: "object/update",
-                object: textEditor.withValue(
-                  object,
-                  value || textEditor.emptyValue,
-                ),
-              },
+          finishedObject
+            ? { type: "object/update", object: finishedObject }
+            : { type: "object/remove", ids: [object.id] },
           editing.historyGroupKey,
         );
       }
