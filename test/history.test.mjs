@@ -38,6 +38,29 @@ test("editing after undo clears redo history", async () => {
 
     assert.equal(history.present.title, "Branched");
     assert.equal(history.future.length, 0);
+
+    const { createCanvasObject } = await vite.ssrLoadModule(
+      "/src/editor/objects/registry.ts",
+    );
+    const object = createCanvasObject("text", {
+      id: "new-text",
+      center: { x: 0, y: 0 },
+    });
+    let creation = createDocumentHistory(createCanvasDocument());
+    creation = documentHistoryReducer(creation, {
+      type: "history/apply",
+      command: { type: "object/add", object },
+      groupKey: "new-text",
+      occurredAt: "2026-01-01T00:00:05.000Z",
+    });
+    creation = documentHistoryReducer(creation, {
+      type: "history/cancel-group",
+      groupKey: "new-text",
+      occurredAt: "2026-01-01T00:00:06.000Z",
+    });
+
+    assert.equal(creation.present.objects[object.id], undefined);
+    assert.equal(creation.past.length, 0);
   } finally {
     await vite.close();
   }

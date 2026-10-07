@@ -39,6 +39,13 @@ function string(value: unknown, path: string): string {
   return value;
 }
 
+function boolean(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new InvalidDocumentError(`${path} must be a boolean`);
+  }
+  return value;
+}
+
 function finiteNumber(value: unknown, path: string): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     throw new InvalidDocumentError(`${path} must be a finite number`);
@@ -141,6 +148,10 @@ function parseTextObject(
     type: "text",
     ...parseFrame(value, path),
     ...parseTextContent(value, path),
+    autoWidth:
+      value.autoWidth === undefined
+        ? false
+        : boolean(value.autoWidth, `${path}.autoWidth`),
   };
 }
 

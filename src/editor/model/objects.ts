@@ -40,7 +40,10 @@ type CanvasObjectBase<TType extends string> = ObjectFrame & {
   type: TType;
 };
 
-export type TextObject = CanvasObjectBase<"text"> & TextContent;
+export type TextObject = CanvasObjectBase<"text"> &
+  TextContent & {
+    autoWidth: boolean;
+  };
 export type RectangleObject = CanvasObjectBase<"rectangle"> &
   ShapeStyle &
   TextContent;

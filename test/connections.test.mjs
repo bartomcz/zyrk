@@ -60,7 +60,9 @@ test("connections snap to edges, persist, and are removed with an endpoint", asy
       "2026-01-01T00:00:01.000Z",
     );
     assert.deepEqual(document.connections, [connection]);
-    assert.deepEqual(parseCanvasDocumentValue(document).connections, [connection]);
+    const parsedDocument = parseCanvasDocumentValue(document);
+    assert.deepEqual(parsedDocument.connections, [connection]);
+    assert.equal(parsedDocument.objects[source.id].autoWidth, false);
 
     const movedConnection = {
       ...connection,

@@ -6,7 +6,11 @@ import type { CanvasView } from "./CanvasStage";
 type EditorOverlayProps = {
   object: CanvasObject;
   view: CanvasView;
-  onChange: (value: string, contentHeight: number) => void;
+  onChange: (
+    value: string,
+    contentWidth: number,
+    contentHeight: number,
+  ) => void;
   onFinish: () => void;
   onCancel: () => void;
 };
@@ -45,12 +49,20 @@ export function EditorOverlay({
     },
     onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => {
       const editor = event.currentTarget;
-      const height = editor.style.height;
+      const { width, height, whiteSpace, overflowWrap } = editor.style;
+      const borderWidth = editor.offsetWidth - editor.clientWidth;
       const borderHeight = editor.offsetHeight - editor.clientHeight;
       editor.style.height = "0";
       const contentHeight = editor.scrollHeight + borderHeight;
       editor.style.height = height;
-      onChange(editor.value, contentHeight);
+      editor.style.width = "0";
+      editor.style.whiteSpace = "pre";
+      editor.style.overflowWrap = "normal";
+      const contentWidth = editor.scrollWidth + borderWidth;
+      editor.style.width = width;
+      editor.style.whiteSpace = whiteSpace;
+      editor.style.overflowWrap = overflowWrap;
+      onChange(editor.value, contentWidth, contentHeight);
     },
     onBlur: onFinish,
     onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => {

@@ -32,6 +32,7 @@ export function useObjectTransform<TObject extends CanvasObject>({
   const transformerRef = useRef<Konva.Transformer>(null);
   const horizontalResizeRef = useRef(false);
   const resizedWidthRef = useRef<number | null>(null);
+  const resizedHeightRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     if (selected && !editing && objectRef.current && transformerRef.current) {
@@ -49,10 +50,12 @@ export function useObjectTransform<TObject extends CanvasObject>({
           definition.transform.minWidth,
           object.width * Math.abs(node.scaleX()),
         ),
-    height: Math.max(
-      definition.transform.minHeight,
-      object.height * Math.abs(node.scaleY()),
-    ),
+    height: horizontalResizeRef.current
+      ? (resizedHeightRef.current ?? object.height)
+      : Math.max(
+          definition.transform.minHeight,
+          object.height * Math.abs(node.scaleY()),
+        ),
     rotation: node.rotation(),
   });
 
@@ -62,6 +65,7 @@ export function useObjectTransform<TObject extends CanvasObject>({
       (anchor === "middle-left" || anchor === "middle-right") &&
       definition.transform.textResize === "reflow-horizontal";
     resizedWidthRef.current = null;
+    resizedHeightRef.current = null;
   };
 
   const onTransform = () => {
@@ -75,8 +79,13 @@ export function useObjectTransform<TObject extends CanvasObject>({
         text.width() * Math.abs(node.scaleX()),
       );
       text.width(width);
+      text.wrap("word");
+      text.height("auto");
+      const height = Math.max(definition.transform.minHeight, text.height());
+      text.height(height);
       node.scaleX(1);
       resizedWidthRef.current = width;
+      resizedHeightRef.current = height;
       transformerRef.current?.forceUpdate();
     } else if (
       text &&
@@ -98,6 +107,7 @@ export function useObjectTransform<TObject extends CanvasObject>({
     const node = objectRef.current;
     if (!node) return;
     const frame = transformedFrame(node);
+    const resizeMode = horizontalResizeRef.current ? "reflow" : "scale";
 
     node.scaleX(1);
     node.scaleY(1);
@@ -108,8 +118,9 @@ export function useObjectTransform<TObject extends CanvasObject>({
     }
     horizontalResizeRef.current = false;
     resizedWidthRef.current = null;
+    resizedHeightRef.current = null;
     onPreviewFrame(object.id, null);
-    onChange(definition.transform.withFrame(object, frame));
+    onChange(definition.transform.withFrame(object, frame, resizeMode));
   };
 
   return {

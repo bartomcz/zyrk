@@ -21,6 +21,7 @@ import { useDocumentSession } from "./editor/state/useDocumentSession";
 type EditingSession = {
   objectId: ObjectId;
   historyGroupKey: string;
+  isNew: boolean;
 };
 
 export default function App() {
@@ -181,7 +182,13 @@ export default function App() {
       center,
     });
 
-    applyCommand({ type: "object/add", object });
+    if (object.type === "text") {
+      const historyGroupKey = `text-edit:${object.id}:${createObjectId()}`;
+      applyCommand({ type: "object/add", object }, historyGroupKey);
+      setEditing({ objectId: object.id, historyGroupKey, isNew: true });
+    } else {
+      applyCommand({ type: "object/add", object });
+    }
     setSelectedObjectId(object.id);
     setSelectedConnectionId(null);
     setPendingObjectType(null);
@@ -214,10 +221,15 @@ export default function App() {
     setEditing({
       objectId,
       historyGroupKey: `text-edit:${objectId}:${createObjectId()}`,
+      isNew: false,
     });
   };
 
-  const updateEditedText = (value: string, contentHeight: number) => {
+  const updateEditedText = (
+    value: string,
+    contentWidth: number,
+    contentHeight: number,
+  ) => {
     if (!editing) return;
     const object = document.objects[editing.objectId];
     if (!object) return;
@@ -228,7 +240,12 @@ export default function App() {
     applyCommand(
       {
         type: "object/update",
-        object: textEditor.update(object, value, contentHeight),
+        object: textEditor.update(
+          object,
+          value,
+          contentWidth,
+          contentHeight,
+        ),
       },
       editing.historyGroupKey,
     );
@@ -241,6 +258,11 @@ export default function App() {
       const textEditor = getObjectDefinition(object).textEditor;
       if (textEditor) {
         const finishedObject = textEditor.finish(object);
+        if (!finishedObject && editing.isNew) {
+          cancelCommandGroup(editing.historyGroupKey);
+          setEditing(null);
+          return;
+        }
         applyCommand(
           finishedObject
             ? { type: "object/update", object: finishedObject }

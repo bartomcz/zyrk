@@ -24,6 +24,7 @@ export type TextEditorBehavior<TObject extends CanvasObject> = {
   update: (
     object: TObject,
     value: string,
+    contentWidth: number,
     contentHeight: number,
   ) => TObject;
   finish: (object: TObject) => TObject | null;
@@ -38,7 +39,11 @@ export type CanvasObjectDefinition<TObject extends CanvasObject> = {
     minHeight: number;
     keepRatio: boolean;
     textResize?: "reflow-horizontal" | "preserve-font-size";
-    withFrame: (object: TObject, frame: ObjectFrame) => TObject;
+    withFrame: (
+      object: TObject,
+      frame: ObjectFrame,
+      resizeMode?: "scale" | "reflow",
+    ) => TObject;
   };
   textEditor?: TextEditorBehavior<TObject>;
 };

@@ -6,9 +6,8 @@ import {
   type ObjectRendererProps,
 } from "../definition";
 
-export const DEFAULT_TEXT_WIDTH = 240;
-export const DEFAULT_TEXT_HEIGHT = 44;
 export const DEFAULT_TEXT_FONT_SIZE = 28;
+export const DEFAULT_TEXT_HEIGHT = DEFAULT_TEXT_FONT_SIZE;
 const MIN_TEXT_WIDTH = 40;
 const MIN_TEXT_HEIGHT = 24;
 
@@ -22,6 +21,7 @@ function TextObjectRenderer({
       text={object.text}
       width={object.width}
       height={object.height}
+      wrap={object.autoWidth ? "none" : "word"}
       align={object.textAlign}
       verticalAlign="middle"
       fontSize={object.fontSize}
@@ -36,10 +36,11 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
   create: ({ id, center }) => ({
     id,
     type: "text",
-    text: "Text",
-    x: center.x - DEFAULT_TEXT_WIDTH / 2,
+    text: "",
+    autoWidth: true,
+    x: center.x - MIN_TEXT_WIDTH / 2,
     y: center.y - DEFAULT_TEXT_HEIGHT / 2,
-    width: DEFAULT_TEXT_WIDTH,
+    width: MIN_TEXT_WIDTH,
     height: DEFAULT_TEXT_HEIGHT,
     rotation: 0,
     fontSize: DEFAULT_TEXT_FONT_SIZE,
@@ -53,19 +54,40 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
     minHeight: MIN_TEXT_HEIGHT,
     keepRatio: true,
     textResize: "reflow-horizontal",
-    withFrame: (object, frame) => ({
+    withFrame: (object, frame, resizeMode) => ({
       ...object,
       ...frame,
-      fontSize: object.fontSize * (frame.height / object.height),
+      autoWidth: object.autoWidth && frame.width === object.width,
+      fontSize:
+        resizeMode === "reflow"
+          ? object.fontSize
+          : object.fontSize * (frame.height / object.height),
     }),
   },
   textEditor: {
     getValue: (object) => object.text,
-    update: (object, value, contentHeight) => {
-      const height = Math.max(MIN_TEXT_HEIGHT, contentHeight);
-      return value === object.text && height === object.height
+    update: (object, value, contentWidth, contentHeight) => {
+      const width = object.autoWidth
+        ? Math.max(MIN_TEXT_WIDTH, contentWidth)
+        : object.width;
+      const height =
+        !object.autoWidth && contentWidth <= object.width
+          ? Math.max(
+              MIN_TEXT_HEIGHT,
+              object.fontSize * value.split("\n").length,
+            )
+          : Math.max(MIN_TEXT_HEIGHT, object.fontSize, contentHeight);
+      return value === object.text &&
+        width === object.width &&
+        height === object.height
         ? object
-        : { ...object, text: value, height };
+        : {
+            ...object,
+            text: value,
+            x: object.x + (object.width - width) / 2,
+            width,
+            height,
+          };
     },
     finish: (object) => {
       const text = object.text.trim();
@@ -77,6 +99,8 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
       fontFamily: object.fontFamily,
       fontSize: `${object.fontSize}px`,
       textAlign: object.textAlign,
+      whiteSpace: object.autoWidth ? "pre" : "pre-wrap",
+      overflowWrap: object.autoWidth ? "normal" : "break-word",
     }),
   },
 };
