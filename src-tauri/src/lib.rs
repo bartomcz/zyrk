@@ -1,3 +1,5 @@
+mod automation;
+
 use std::{
     fs::{self, File},
     io::Write,
@@ -125,12 +127,16 @@ fn save_recovery_snapshot(app: tauri::AppHandle, snapshot: String) -> Result<(),
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(automation::AutomationState::default())
         .invoke_handler(tauri::generate_handler![
             confirm_discard_changes,
             open_document,
             save_document,
             load_recovery_snapshots,
-            save_recovery_snapshot
+            save_recovery_snapshot,
+            automation::enable_automation,
+            automation::disable_automation,
+            automation::complete_automation_request
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
