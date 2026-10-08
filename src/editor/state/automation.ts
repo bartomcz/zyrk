@@ -13,7 +13,6 @@ export type AutomationResponse =
       ok: true;
       apiVersion: typeof AUTOMATION_API_VERSION;
       operation: "canvas.get";
-      revision: number;
       document: CanvasDocument;
     }
   | {
@@ -66,7 +65,6 @@ export function createAutomationService(
           ok: true,
           apiVersion: AUTOMATION_API_VERSION,
           operation: "canvas.get",
-          revision: document.revision,
           document,
         };
       } catch {

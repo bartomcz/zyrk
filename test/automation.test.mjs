@@ -21,7 +21,8 @@ test("canvas.get returns a validated snapshot of the active document", async () 
     });
     assert.equal(first.ok, true);
     assert.equal(first.document.title, "First");
-    assert.equal(first.revision, 0);
+    assert.equal(first.document.revision, 0);
+    assert.equal("revision" in first, false);
 
     first.document.title = "Changed outside the editor";
     assert.equal(activeDocument.title, "First");
@@ -33,7 +34,7 @@ test("canvas.get returns a validated snapshot of the active document", async () 
     });
     assert.equal(second.ok, true);
     assert.equal(second.document.title, "Second");
-    assert.equal(second.revision, 1);
+    assert.equal(second.document.revision, 1);
 
     assert.deepEqual(
       service.execute({
