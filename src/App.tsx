@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import "./App.css";
 import { CanvasStage, type CanvasView } from "./editor/canvas/CanvasStage";
@@ -24,6 +25,16 @@ type EditingSession = {
   isNew: boolean;
 };
 
+type AutomationAccess = {
+  url: string;
+  token: string;
+};
+
+type AutomationRequestEvent = {
+  id: string;
+  request: unknown;
+};
+
 export default function App() {
   const [size, setSize] = useState(() => ({
     width: window.innerWidth,
@@ -40,6 +51,7 @@ export default function App() {
     recoveryHydrated,
     canUndo,
     canRedo,
+    automationService,
     applyCommand,
     endCommandGroup,
     cancelCommandGroup,
@@ -58,6 +70,11 @@ export default function App() {
   const [editing, setEditing] = useState<EditingSession | null>(null);
   const [pendingObjectType, setPendingObjectType] =
     useState<CanvasObjectType | null>(null);
+  const [automationAccess, setAutomationAccess] =
+    useState<AutomationAccess | null>(null);
+  const [automationReady, setAutomationReady] = useState(false);
+  const [automationBusy, setAutomationBusy] = useState(false);
+  const [automationError, setAutomationError] = useState<string | null>(null);
 
   const editedObject = editing
     ? document.objects[editing.objectId]
@@ -70,6 +87,41 @@ export default function App() {
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<AutomationRequestEvent>("automation-request", ({ payload }) => {
+      const response = automationService.execute(payload.request);
+      void invoke("complete_automation_request", {
+        id: payload.id,
+        response,
+      }).catch((error) => {
+        if (!cancelled) setAutomationError(String(error));
+      });
+    })
+      .then(async (stopListening) => {
+        if (cancelled) {
+          stopListening();
+          return;
+        }
+        unlisten = stopListening;
+        await invoke("disable_automation");
+        if (!cancelled) setAutomationReady(true);
+      })
+      .catch((error) => {
+        if (!cancelled) setAutomationError(String(error));
+      });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+      void invoke("disable_automation").catch(() => undefined);
+    };
+  }, [automationService]);
 
   useEffect(() => {
     if (selectedObjectId && !document.objects[selectedObjectId]) {
@@ -305,6 +357,39 @@ export default function App() {
     }
   };
 
+  const toggleAutomationAccess = async () => {
+    if (!automationReady || automationBusy) return;
+
+    setAutomationBusy(true);
+    setAutomationError(null);
+    try {
+      if (automationAccess) {
+        await invoke("disable_automation");
+        setAutomationAccess(null);
+      } else {
+        setAutomationAccess(
+          await invoke<AutomationAccess>("enable_automation"),
+        );
+      }
+    } catch (error) {
+      setAutomationError(String(error));
+    } finally {
+      setAutomationBusy(false);
+    }
+  };
+
+  const curlCommand = automationAccess
+    ? `curl -X POST ${automationAccess.url} \\\n  -H "Authorization: Bearer ${automationAccess.token}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"apiVersion":1,"operation":"canvas.get"}'`
+    : "";
+
+  const copyCurlCommand = async () => {
+    try {
+      await navigator.clipboard.writeText(curlCommand);
+    } catch (error) {
+      setAutomationError(`Could not copy command: ${String(error)}`);
+    }
+  };
+
   if (!recoveryHydrated) {
     return <main aria-label="Loading canvas" aria-busy="true" />;
   }
@@ -344,11 +429,45 @@ export default function App() {
         />
       )}
 
+      {automationAccess && (
+        <section className="automation-panel" aria-label="Agent access">
+          <div className="automation-panel-header">
+            <strong>Agent access enabled</strong>
+            <button
+              type="button"
+              disabled={automationBusy}
+              onClick={() => void toggleAutomationAccess()}
+            >
+              Disable
+            </button>
+          </div>
+          <label htmlFor="automation-command">Call canvas.get</label>
+          <textarea
+            id="automation-command"
+            readOnly
+            rows={4}
+            value={curlCommand}
+          />
+          <button type="button" onClick={() => void copyCurlCommand()}>
+            Copy curl command
+          </button>
+        </section>
+      )}
+
+      {automationError && (
+        <p className="automation-error" role="alert">
+          {automationError}
+        </p>
+      )}
+
       <EditorToolbar
         canUndo={canUndo}
         canRedo={canRedo}
         isDirty={isDirty}
         activeObjectType={pendingObjectType}
+        agentAccessEnabled={automationAccess !== null}
+        agentAccessAvailable={isTauri() && automationReady && !automationBusy}
+        onToggleAgentAccess={() => void toggleAutomationAccess()}
         onNew={newDocument}
         onSelectText={() => selectObjectTool("text")}
         onSelectRectangle={() => selectObjectTool("rectangle")}

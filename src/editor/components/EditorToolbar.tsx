@@ -5,6 +5,9 @@ type EditorToolbarProps = {
   canRedo: boolean;
   isDirty: boolean;
   activeObjectType: CanvasObjectType | null;
+  agentAccessEnabled: boolean;
+  agentAccessAvailable: boolean;
+  onToggleAgentAccess: () => void;
   onNew: () => void;
   onSelectText: () => void;
   onSelectRectangle: () => void;
@@ -20,6 +23,9 @@ export function EditorToolbar({
   canRedo,
   isDirty,
   activeObjectType,
+  agentAccessEnabled,
+  agentAccessAvailable,
+  onToggleAgentAccess,
   onNew,
   onSelectText,
   onSelectRectangle,
@@ -137,6 +143,28 @@ export function EditorToolbar({
       >
         <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
           <path d="M5 4h10l2 2v6M8 4v6h7V4M5 14v6h6M13 19l5.5-5.5 2 2L15 21h-2v-2Z" />
+        </svg>
+      </button>
+
+      <span className="tool-divider" aria-hidden="true" />
+
+      <button
+        className="tool-button"
+        type="button"
+        aria-label="Agent access"
+        aria-pressed={agentAccessEnabled}
+        title={
+          agentAccessAvailable
+            ? agentAccessEnabled
+              ? "Disable agent access"
+              : "Enable agent access"
+            : "Agent access is unavailable"
+        }
+        disabled={!agentAccessAvailable}
+        onClick={onToggleAgentAccess}
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="22" height="22">
+          <path d="M8 12h8M12 8v8M5 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm14 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM5 21a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm14 0a2 2 0 1 0 0-4 2 2 0 0 0 0 4ZM6.5 6.5l4 4m7-4-4 4m-7 7 4-4m7 4-4-4" />
         </svg>
       </button>
     </aside>

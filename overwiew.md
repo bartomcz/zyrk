@@ -143,3 +143,28 @@ storage, file input, and downloads instead.
 Explicit document files remain independent of recovery files: saving a user
 document updates the saved revision, while the recovery copy continues to
 track the exact working state, including subsequent undo or redo operations.
+
+## Automation API
+
+`state/automation.ts` defines the versioned, transport-neutral automation
+contract. `useDocumentSession` owns an instance backed by a getter for the live
+document; MCP and CLI adapters should call this service rather than accessing
+React or Konva state directly.
+
+The proof of concept exposes one operation:
+
+```json
+{ "apiVersion": 1, "operation": "canvas.get" }
+```
+
+A successful response contains `ok`, `apiVersion`, `operation`, `revision`, and
+a validated document snapshot. Invalid requests return an `invalid_request`
+error.
+
+In the desktop app, the Agent Access toolbar button starts a loopback-only HTTP
+server on a random port. Access is off by default and uses a new ephemeral token
+each time it is enabled. The displayed curl command calls
+`POST /v1/automation` with the token in the `Authorization: Bearer` header.
+Requests are capped at 64 KiB and time out if the active editor does not answer
+within five seconds. Disabling access stops the listener and invalidates the
+connection details.
