@@ -114,20 +114,6 @@ main {
   background: rgba(23, 23, 23, 0.1);
 }
 
-.automation-error {
-  position: fixed;
-  z-index: 11;
-  bottom: 18px;
-  left: 50%;
-  max-width: min(520px, calc(100vw - 36px));
-  margin: 0;
-  padding: 10px 14px;
-  transform: translateX(-50%);
-  border-radius: 6px;
-  color: #991b1b;
-  background: #fee2e2;
-}
-
 .canvas-text-editor {
   position: absolute;
   z-index: 5;

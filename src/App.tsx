@@ -65,7 +65,6 @@ export default function App() {
   const [editing, setEditing] = useState<EditingSession | null>(null);
   const [pendingObjectType, setPendingObjectType] =
     useState<CanvasObjectType | null>(null);
-  const [automationError, setAutomationError] = useState<string | null>(null);
 
   const editedObject = editing
     ? document.objects[editing.objectId]
@@ -91,7 +90,9 @@ export default function App() {
         id: payload.id,
         response,
       }).catch((error) => {
-        if (!cancelled) setAutomationError(String(error));
+        if (!cancelled) {
+          console.error("Could not complete automation request", error);
+        }
       });
     })
       .then(async (stopListening) => {
@@ -103,7 +104,7 @@ export default function App() {
         await invoke("start_automation");
       })
       .catch((error) => {
-        if (!cancelled) setAutomationError(String(error));
+        if (!cancelled) console.error("Could not start automation", error);
       });
 
     return () => {
@@ -383,12 +384,6 @@ export default function App() {
           onFinish={finishEditing}
           onCancel={cancelEditing}
         />
-      )}
-
-      {automationError && (
-        <p className="automation-error" role="alert">
-          {automationError}
-        </p>
       )}
 
       <EditorToolbar
