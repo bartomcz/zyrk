@@ -1,4 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useEffect, useState } from "react";
 import "./App.css";
 import { CanvasStage, type CanvasView } from "./editor/canvas/CanvasStage";
@@ -24,6 +25,11 @@ type EditingSession = {
   isNew: boolean;
 };
 
+type AutomationRequestEvent = {
+  id: string;
+  request: unknown;
+};
+
 export default function App() {
   const [size, setSize] = useState(() => ({
     width: window.innerWidth,
@@ -40,6 +46,7 @@ export default function App() {
     recoveryHydrated,
     canUndo,
     canRedo,
+    automationService,
     applyCommand,
     endCommandGroup,
     cancelCommandGroup,
@@ -70,6 +77,41 @@ export default function App() {
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
+
+  useEffect(() => {
+    if (!isTauri()) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    void listen<AutomationRequestEvent>("automation-request", ({ payload }) => {
+      const response = automationService.execute(payload.request);
+      void invoke("complete_automation_request", {
+        id: payload.id,
+        response,
+      }).catch((error) => {
+        if (!cancelled) {
+          console.error("Could not complete automation request", error);
+        }
+      });
+    })
+      .then(async (stopListening) => {
+        if (cancelled) {
+          stopListening();
+          return;
+        }
+        unlisten = stopListening;
+        await invoke("start_automation");
+      })
+      .catch((error) => {
+        if (!cancelled) console.error("Could not start automation", error);
+      });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [automationService]);
 
   useEffect(() => {
     if (selectedObjectId && !document.objects[selectedObjectId]) {

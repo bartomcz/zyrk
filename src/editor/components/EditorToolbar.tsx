@@ -139,6 +139,7 @@ export function EditorToolbar({
           <path d="M5 4h10l2 2v6M8 4v6h7V4M5 14v6h6M13 19l5.5-5.5 2 2L15 21h-2v-2Z" />
         </svg>
       </button>
+
     </aside>
   );
 }

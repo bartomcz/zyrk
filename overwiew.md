@@ -143,3 +143,33 @@ storage, file input, and downloads instead.
 Explicit document files remain independent of recovery files: saving a user
 document updates the saved revision, while the recovery copy continues to
 track the exact working state, including subsequent undo or redo operations.
+
+## Automation API
+
+`state/automation.ts` defines the versioned, transport-neutral automation
+contract. `useDocumentSession` owns an instance backed by a getter for the live
+document; MCP and CLI adapters should call this service rather than accessing
+React or Konva state directly.
+
+The proof of concept exposes one operation:
+
+```json
+{ "apiVersion": 1, "operation": "canvas.get" }
+```
+
+A successful response contains `ok`, `apiVersion`, `operation`, `revision`, and
+a validated document snapshot. Invalid requests return an `invalid_request`
+error.
+
+The desktop app starts a local Unix domain socket at
+`<system temp directory>/zyrk.sock`, or a `\\.\pipe\zyrk.sock` named pipe on
+Windows. Each connection handles one newline-terminated JSON message:
+
+```json
+{"apiVersion":1,"operation":"canvas.get"}
+```
+
+The server returns one newline-terminated JSON response and closes the
+connection. Messages are capped at 64 KiB and time out if the active editor does
+not answer within five seconds. The operating system restricts the Unix socket
+to the current user.

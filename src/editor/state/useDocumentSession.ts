@@ -5,6 +5,7 @@ import {
   recoveryRepository,
   type RecoverySnapshot,
 } from "../persistence/recoveryRepository";
+import { createAutomationService } from "./automation";
 import type { DocumentCommand } from "./commands";
 import {
   createDocumentHistory,
@@ -35,6 +36,11 @@ export function useDocumentSession() {
   const latestRecovery = useRef<RecoverySnapshot | null>(null);
 
   const document = history.present;
+  const activeDocument = useRef(document);
+  activeDocument.current = document;
+  const [automationService] = useState(() =>
+    createAutomationService(() => activeDocument.current),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +133,7 @@ export function useDocumentSession() {
     recoveryHydrated,
     canUndo: history.past.length > 0,
     canRedo: history.future.length > 0,
+    automationService,
     applyCommand,
     endCommandGroup: (groupKey: string) =>
       dispatch({ type: "history/end-group", groupKey }),
