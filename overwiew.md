@@ -151,14 +151,19 @@ contract. `useDocumentSession` owns an instance backed by a getter for the live
 document; MCP and CLI adapters should call this service rather than accessing
 React or Konva state directly.
 
-The proof of concept exposes one operation:
+The API exposes operations to read the canvas and add objects or connections:
 
 ```json
 { "apiVersion": 1, "operation": "canvas.get" }
+{ "apiVersion": 1, "operation": "canvas.object.add", "objectType": "text", "center": { "x": 100, "y": 200 }, "text": "Hello" }
+{ "apiVersion": 1, "operation": "canvas.connection.add", "from": { "objectId": "source", "edge": "right" }, "to": { "objectId": "target", "edge": "left" } }
 ```
 
-A successful response contains `ok`, `apiVersion`, `operation`, `revision`, and
-a validated document snapshot. Invalid requests return an `invalid_request`
+`canvas.object.add` supports `text` and `rectangle` and uses editor defaults.
+`canvas.connection.add` requires existing, distinct object IDs and explicit `top`,
+`right`, `bottom`, or `left` edges. Both apply the same history command as an
+in-app edit so undo/redo and recovery remain consistent. Text is required for text
+objects and optional for rectangles. Invalid requests return an `invalid_request`
 error.
 
 The desktop app starts a local Unix domain socket at
