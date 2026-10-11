@@ -1,31 +1,27 @@
+use interprocess::local_socket::{
+    prelude::*, GenericFilePath, ListenerNonblockingMode, ListenerOptions,
+};
 use serde::Serialize;
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
-    io::Read,
+    io::{Read, Write},
     sync::{
         atomic::{AtomicBool, Ordering},
         mpsc, Arc, Mutex,
     },
     thread,
-    time::Duration,
+    time::{Duration, Instant},
 };
 use tauri::{AppHandle, Emitter, EventTarget, State};
-use tiny_http::{Header, Method, Request, Response, Server};
 use uuid::Uuid;
 
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const AUTOMATION_EVENT: &str = "automation-request";
+const AUTOMATION_SOCKET_NAME: &str = "zyrk.sock";
 
 type PendingRequests = Arc<Mutex<HashMap<String, mpsc::Sender<Value>>>>;
-
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AutomationAccess {
-    url: String,
-    token: String,
-}
 
 #[derive(Clone, Serialize)]
 struct AutomationRequestEvent {
@@ -34,7 +30,6 @@ struct AutomationRequestEvent {
 }
 
 struct AutomationServer {
-    access: AutomationAccess,
     running: Arc<AtomicBool>,
     thread: Option<thread::JoinHandle<()>>,
     pending: PendingRequests,
@@ -47,7 +42,7 @@ impl AutomationServer {
             for (_, sender) in pending.drain() {
                 let _ = sender.send(error_body(
                     "service_unavailable",
-                    "Agent access was disabled",
+                    "Automation service stopped",
                 ));
             }
         }
@@ -70,59 +65,37 @@ pub struct AutomationState {
 }
 
 #[tauri::command]
-pub fn enable_automation(
-    app: AppHandle,
-    state: State<'_, AutomationState>,
-) -> Result<AutomationAccess, String> {
+pub fn start_automation(app: AppHandle, state: State<'_, AutomationState>) -> Result<(), String> {
     let mut active = state.server.lock().map_err(|error| error.to_string())?;
-    if let Some(server) = active.as_ref() {
-        return Ok(server.access.clone());
+    if active.is_some() {
+        return Ok(());
     }
 
-    let server = Server::http("127.0.0.1:0").map_err(|error| error.to_string())?;
-    let port = server
-        .server_addr()
-        .to_ip()
-        .ok_or("Automation server did not bind to an IP address")?
-        .port();
-    let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
-    let access = AutomationAccess {
-        url: format!("http://127.0.0.1:{port}/v1/automation"),
-        token: token.clone(),
-    };
+    let endpoint = automation_endpoint();
+    let listener = bind_listener(&endpoint)?;
     let running = Arc::new(AtomicBool::new(true));
     let thread_running = Arc::clone(&running);
     let pending = Arc::clone(&state.pending);
     let thread_pending = Arc::clone(&pending);
     let thread = thread::spawn(move || {
         while thread_running.load(Ordering::Relaxed) {
-            match server.recv_timeout(Duration::from_millis(100)) {
-                Ok(Some(request)) => {
-                    handle_request(request, &token, &app, &thread_pending);
+            match listener.accept() {
+                Ok(connection) => {
+                    handle_connection(connection, &app, &thread_pending, &thread_running)
                 }
-                Ok(None) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(100));
+                }
                 Err(_) => break,
             }
         }
     });
 
     *active = Some(AutomationServer {
-        access: access.clone(),
         running,
         thread: Some(thread),
         pending,
     });
-    Ok(access)
-}
-
-#[tauri::command]
-pub fn disable_automation(state: State<'_, AutomationState>) -> Result<(), String> {
-    let server = state
-        .server
-        .lock()
-        .map_err(|error| error.to_string())?
-        .take();
-    drop(server);
     Ok(())
 }
 
@@ -143,104 +116,64 @@ pub fn complete_automation_request(
     Ok(())
 }
 
-fn handle_request(mut request: Request, token: &str, app: &AppHandle, pending: &PendingRequests) {
-    if !request
-        .remote_addr()
-        .is_some_and(|address| address.ip().is_loopback())
+fn automation_endpoint() -> String {
+    #[cfg(unix)]
+    return std::env::temp_dir()
+        .join(AUTOMATION_SOCKET_NAME)
+        .to_string_lossy()
+        .into_owned();
+
+    #[cfg(windows)]
+    return format!(r"\\.\pipe\{AUTOMATION_SOCKET_NAME}");
+}
+
+fn bind_listener(endpoint: &str) -> Result<LocalSocketListener, String> {
+    let name = endpoint
+        .to_fs_name::<GenericFilePath>()
+        .map_err(|error| error.to_string())?;
+    let listener = ListenerOptions::new()
+        .name(name)
+        .nonblocking(ListenerNonblockingMode::Both)
+        .create_sync()
+        .map_err(|error| error.to_string())?;
+
+    #[cfg(unix)]
     {
-        respond(
-            request,
-            403,
-            error_body("forbidden", "Loopback access only"),
-        );
-        return;
-    }
-    if request.url() != "/v1/automation" {
-        respond(request, 404, error_body("not_found", "Route not found"));
-        return;
-    }
-    if request.method() != &Method::Post {
-        respond(
-            request,
-            405,
-            error_body("method_not_allowed", "Use POST for this endpoint"),
-        );
-        return;
-    }
-    if !is_authorized(&request, token) {
-        respond(request, 401, error_body("unauthorized", "Invalid token"));
-        return;
-    }
-    if !has_json_content_type(&request) {
-        respond(
-            request,
-            415,
-            error_body(
-                "unsupported_media_type",
-                "Content-Type must be application/json",
-            ),
-        );
-        return;
-    }
-    if request
-        .body_length()
-        .is_some_and(|length| length > MAX_REQUEST_BYTES)
-    {
-        respond(
-            request,
-            413,
-            error_body("payload_too_large", "Request body is too large"),
-        );
-        return;
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(endpoint, std::fs::Permissions::from_mode(0o600))
+            .map_err(|error| error.to_string())?;
     }
 
-    let mut body = Vec::new();
-    if request
-        .as_reader()
-        .take((MAX_REQUEST_BYTES + 1) as u64)
-        .read_to_end(&mut body)
-        .is_err()
-    {
-        respond(
-            request,
-            400,
-            error_body("invalid_request", "Could not read request body"),
-        );
-        return;
-    }
-    if body.len() > MAX_REQUEST_BYTES {
-        respond(
-            request,
-            413,
-            error_body("payload_too_large", "Request body is too large"),
-        );
-        return;
-    }
-    let operation = match serde_json::from_slice(&body) {
+    Ok(listener)
+}
+
+fn handle_connection(
+    mut connection: LocalSocketStream,
+    app: &AppHandle,
+    pending: &PendingRequests,
+    running: &AtomicBool,
+) {
+    let operation = match read_request(&mut connection, running) {
         Ok(operation) => operation,
-        Err(_) => {
-            respond(
-                request,
-                400,
-                error_body("invalid_request", "Request body must be valid JSON"),
-            );
+        Err(error) => {
+            respond(&mut connection, error);
             return;
         }
     };
 
     let id = Uuid::new_v4().to_string();
     let (sender, receiver) = mpsc::channel();
-    if pending
-        .lock()
-        .map(|mut requests| requests.insert(id.clone(), sender))
-        .is_err()
-    {
-        respond(
-            request,
-            503,
-            error_body("service_unavailable", "Automation service is unavailable"),
-        );
-        return;
+    match pending.lock() {
+        Ok(mut requests) if running.load(Ordering::Relaxed) => {
+            requests.insert(id.clone(), sender);
+        }
+        _ => {
+            respond(
+                &mut connection,
+                error_body("service_unavailable", "Automation service is unavailable"),
+            );
+            return;
+        }
     }
 
     if app
@@ -258,57 +191,76 @@ fn handle_request(mut request: Request, token: &str, app: &AppHandle, pending: &
             requests.remove(&id);
         }
         respond(
-            request,
-            503,
+            &mut connection,
             error_body("service_unavailable", "Editor is unavailable"),
         );
         return;
     }
 
     let response = match receiver.recv_timeout(REQUEST_TIMEOUT) {
-        Ok(response) => (200, response),
+        Ok(response) => response,
         Err(_) => {
             if let Ok(mut requests) = pending.lock() {
                 requests.remove(&id);
             }
-            (
-                504,
-                error_body("gateway_timeout", "Editor did not respond in time"),
-            )
+            error_body("gateway_timeout", "Editor did not respond in time")
         }
     };
-    respond(request, response.0, response.1);
+    respond(&mut connection, response);
 }
 
-fn is_authorized(request: &Request, token: &str) -> bool {
-    authorization_matches(
-        request
-            .headers()
-            .iter()
-            .find(|header| header.field.equiv("Authorization"))
-            .map(|header| header.value.as_str()),
-        token,
-    )
-}
+fn read_request(connection: &mut LocalSocketStream, running: &AtomicBool) -> Result<Value, Value> {
+    let deadline = Instant::now() + REQUEST_TIMEOUT;
+    let mut body = Vec::new();
+    let mut chunk = [0; 4096];
 
-fn authorization_matches(value: Option<&str>, token: &str) -> bool {
-    value.is_some_and(|value| value == format!("Bearer {token}"))
-}
+    loop {
+        if !running.load(Ordering::Relaxed) {
+            return Err(error_body(
+                "service_unavailable",
+                "Automation service stopped",
+            ));
+        }
+        if Instant::now() >= deadline {
+            return Err(error_body(
+                "invalid_request",
+                "Timed out reading request message",
+            ));
+        }
 
-fn has_json_content_type(request: &Request) -> bool {
-    is_json_content_type(
-        request
-            .headers()
-            .iter()
-            .find(|header| header.field.equiv("Content-Type"))
-            .map(|header| header.value.as_str()),
-    )
-}
+        match connection.read(&mut chunk) {
+            Ok(0) => break,
+            Ok(length) => {
+                let length = chunk[..length]
+                    .iter()
+                    .position(|byte| *byte == b'\n')
+                    .map_or(length, |index| index + 1);
+                body.extend_from_slice(&chunk[..length]);
+                if body.len() > MAX_REQUEST_BYTES {
+                    return Err(error_body(
+                        "payload_too_large",
+                        "Request message is too large",
+                    ));
+                }
+                if body.last() == Some(&b'\n') {
+                    break;
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(_) => {
+                return Err(error_body(
+                    "invalid_request",
+                    "Could not read request message",
+                ));
+            }
+        }
+    }
 
-fn is_json_content_type(value: Option<&str>) -> bool {
-    value
-        .and_then(|value| value.split(';').next())
-        .is_some_and(|value| value.trim().eq_ignore_ascii_case("application/json"))
+    serde_json::from_slice(&body)
+        .map_err(|_| error_body("invalid_request", "Request message must contain valid JSON"))
 }
 
 fn error_body(code: &str, message: &str) -> Value {
@@ -319,12 +271,25 @@ fn error_body(code: &str, message: &str) -> Value {
     })
 }
 
-fn respond(request: Request, status: u16, body: Value) {
-    let content_type = Header::from_bytes("Content-Type", "application/json").unwrap();
-    let response = Response::from_data(serde_json::to_vec(&body).unwrap())
-        .with_status_code(status)
-        .with_header(content_type);
-    let _ = request.respond(response);
+fn respond(connection: &mut LocalSocketStream, body: Value) {
+    let Ok(mut message) = serde_json::to_vec(&body) else {
+        return;
+    };
+    message.push(b'\n');
+    let deadline = Instant::now() + REQUEST_TIMEOUT;
+    let mut written = 0;
+
+    while written < message.len() && Instant::now() < deadline {
+        match connection.write(&message[written..]) {
+            Ok(0) => return,
+            Ok(length) => written += length,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
+            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(10));
+            }
+            Err(_) => return,
+        }
+    }
 }
 
 #[cfg(test)]
@@ -332,20 +297,63 @@ mod tests {
     use super::*;
 
     #[test]
-    fn requires_an_exact_bearer_token() {
-        assert!(authorization_matches(Some("Bearer secret"), "secret"));
-        assert!(!authorization_matches(Some("Bearer wrong"), "secret"));
-        assert!(!authorization_matches(Some("bearer secret"), "secret"));
-        assert!(!authorization_matches(None, "secret"));
+    fn local_transport_round_trips_json() {
+        let endpoint = automation_endpoint();
+        let listener = bind_listener(&endpoint).unwrap();
+        let server = thread::spawn(move || {
+            let connection = loop {
+                match listener.accept() {
+                    Ok(connection) => break connection,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                    Err(error) => panic!("accept failed: {error}"),
+                }
+            };
+            let mut connection = connection;
+            let running = AtomicBool::new(true);
+            let request = read_request(&mut connection, &running).unwrap();
+            assert_eq!(
+                request,
+                json!({ "apiVersion": 1, "operation": "canvas.get" })
+            );
+            respond(&mut connection, json!({ "ok": true, "apiVersion": 1 }));
+        });
+
+        let name = endpoint.as_str().to_fs_name::<GenericFilePath>().unwrap();
+        let mut client = LocalSocketStream::connect(name).unwrap();
+        client
+            .write_all(
+                br#"{"apiVersion":1,"operation":"canvas.get"}
+"#,
+            )
+            .unwrap();
+        client.set_nonblocking(true).unwrap();
+
+        let deadline = Instant::now() + REQUEST_TIMEOUT;
+        let mut response = Vec::new();
+        let mut chunk = [0; 256];
+        while response.last() != Some(&b'\n') && Instant::now() < deadline {
+            match client.read(&mut chunk) {
+                Ok(0) => break,
+                Ok(length) => response.extend_from_slice(&chunk[..length]),
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    thread::sleep(Duration::from_millis(10));
+                }
+                Err(error) => panic!("read failed: {error}"),
+            }
+        }
+
+        server.join().unwrap();
+        assert_eq!(
+            serde_json::from_slice::<Value>(&response).unwrap(),
+            json!({ "ok": true, "apiVersion": 1 })
+        );
     }
 
     #[test]
-    fn requires_a_json_content_type() {
-        assert!(is_json_content_type(Some("application/json")));
-        assert!(is_json_content_type(Some(
-            "application/json; charset=utf-8"
-        )));
-        assert!(!is_json_content_type(Some("text/plain")));
-        assert!(!is_json_content_type(None));
+    fn uses_a_stable_endpoint() {
+        assert_eq!(automation_endpoint(), automation_endpoint());
+        assert!(automation_endpoint().ends_with(AUTOMATION_SOCKET_NAME));
     }
 }

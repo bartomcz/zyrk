@@ -161,10 +161,15 @@ A successful response contains `ok`, `apiVersion`, `operation`, `revision`, and
 a validated document snapshot. Invalid requests return an `invalid_request`
 error.
 
-In the desktop app, the Agent Access toolbar button starts a loopback-only HTTP
-server on a random port. Access is off by default and uses a new ephemeral token
-each time it is enabled. The displayed curl command calls
-`POST /v1/automation` with the token in the `Authorization: Bearer` header.
-Requests are capped at 64 KiB and time out if the active editor does not answer
-within five seconds. Disabling access stops the listener and invalidates the
-connection details.
+The desktop app starts a local Unix domain socket at
+`<system temp directory>/zyrk.sock`, or a `\\.\pipe\zyrk.sock` named pipe on
+Windows. Each connection handles one newline-terminated JSON message:
+
+```json
+{"apiVersion":1,"operation":"canvas.get"}
+```
+
+The server returns one newline-terminated JSON response and closes the
+connection. Messages are capped at 64 KiB and time out if the active editor does
+not answer within five seconds. The operating system restricts the Unix socket
+to the current user.

@@ -134,8 +134,7 @@ pub fn run() {
             save_document,
             load_recovery_snapshots,
             save_recovery_snapshot,
-            automation::enable_automation,
-            automation::disable_automation,
+            automation::start_automation,
             automation::complete_automation_request
         ])
         .run(tauri::generate_context!())
