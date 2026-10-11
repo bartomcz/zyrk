@@ -24,8 +24,14 @@ npm run tauri dev
 - `npm run build` — type-check and build the frontend
 - `npm run tauri build` — build the desktop app and installers
 - `cargo check --manifest-path src-tauri/Cargo.toml` — check the Rust backend
+- `cargo build --release --manifest-path src-cli/Cargo.toml` — build the standalone CLI
 
-Desktop build artifacts are in `src-tauri/target/release/bundle/`.
+Desktop build artifacts are in `src-tauri/target/release/bundle/`. With the
+desktop app running, query its active canvas with:
+
+```sh
+cargo run --manifest-path src-cli/Cargo.toml -- canvas get
+```
 
 See [`overwiew.md`](overwiew.md) for the document model, object extension
 points, history behavior, and persistence architecture.
