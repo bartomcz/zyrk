@@ -1,3 +1,4 @@
+import Konva from "konva";
 import { Text } from "react-konva";
 import type { TextObject } from "../../model/objects";
 import {
@@ -54,6 +55,18 @@ export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
     minHeight: MIN_TEXT_HEIGHT,
     keepRatio: true,
     textResize: "reflow-horizontal",
+    reflowHeight: (object, width) => {
+      const text = new Konva.Text({
+        text: object.text,
+        width,
+        wrap: "word",
+        fontSize: object.fontSize,
+        fontFamily: object.fontFamily,
+      });
+      const height = Math.max(MIN_TEXT_HEIGHT, text.height());
+      text.destroy();
+      return height;
+    },
     withFrame: (object, frame, resizeMode) => ({
       ...object,
       ...frame,

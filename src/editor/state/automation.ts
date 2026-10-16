@@ -6,10 +6,19 @@ import {
   type ObjectEdge,
 } from "../model/objects";
 import { parseCanvasDocumentValue } from "../model/schema";
-import { createCanvasObject } from "../objects/registry";
+import {
+  createCanvasObject,
+  objectDefinitions,
+  resizeCanvasObject,
+} from "../objects/registry";
 import type { DocumentCommand } from "./commands";
 
 export const AUTOMATION_API_VERSION = 1 as const;
+
+type AutomationObjectSize = {
+  width?: number;
+  height?: number;
+};
 
 export type AutomationRequest =
   | {
@@ -22,6 +31,13 @@ export type AutomationRequest =
       objectType: "text" | "rectangle";
       center: { x: number; y: number };
       text?: string;
+      size?: AutomationObjectSize;
+    }
+  | {
+      apiVersion: typeof AUTOMATION_API_VERSION;
+      operation: "canvas.object.resize";
+      objectId: string;
+      size: AutomationObjectSize;
     }
   | {
       apiVersion: typeof AUTOMATION_API_VERSION;
@@ -41,6 +57,12 @@ export type AutomationResponse =
       ok: true;
       apiVersion: typeof AUTOMATION_API_VERSION;
       operation: "canvas.object.add";
+      object: CanvasObject;
+    }
+  | {
+      ok: true;
+      apiVersion: typeof AUTOMATION_API_VERSION;
+      operation: "canvas.object.resize";
       object: CanvasObject;
     }
   | {
@@ -79,6 +101,36 @@ function isCanvasGetRequest(value: unknown): value is AutomationRequest {
   );
 }
 
+function isObjectSize(value: unknown): value is AutomationObjectSize {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ["width", "height"]) ||
+    (value.width === undefined && value.height === undefined)
+  ) {
+    return false;
+  }
+
+  return [value.width, value.height].every(
+    (dimension) =>
+      dimension === undefined ||
+      (typeof dimension === "number" &&
+        Number.isFinite(dimension) &&
+        dimension > 0),
+  );
+}
+
+function objectSupportsSize(
+  objectType: "text" | "rectangle",
+  size: AutomationObjectSize,
+): boolean {
+  const transform = objectDefinitions[objectType].transform;
+  return (
+    (size.width === undefined || size.width >= transform.minWidth) &&
+    (size.height === undefined ||
+      (objectType === "rectangle" && size.height >= transform.minHeight))
+  );
+}
+
 function isCanvasObjectAddRequest(
   value: unknown,
 ): value is Extract<AutomationRequest, { operation: "canvas.object.add" }> {
@@ -99,13 +151,31 @@ function isCanvasObjectAddRequest(
       "objectType",
       "center",
       "text",
+      "size",
     ]) ||
-    (value.text !== undefined && typeof value.text !== "string")
+    (value.text !== undefined && typeof value.text !== "string") ||
+    (value.size !== undefined &&
+      (!isObjectSize(value.size) ||
+        !objectSupportsSize(value.objectType, value.size)))
   ) {
     return false;
   }
 
   return value.objectType === "rectangle" || Boolean(value.text?.trim());
+}
+
+function isCanvasObjectResizeRequest(
+  value: unknown,
+): value is Extract<AutomationRequest, { operation: "canvas.object.resize" }> {
+  return (
+    isRecord(value) &&
+    value.apiVersion === AUTOMATION_API_VERSION &&
+    value.operation === "canvas.object.resize" &&
+    typeof value.objectId === "string" &&
+    Boolean(value.objectId) &&
+    isObjectSize(value.size) &&
+    hasOnlyKeys(value, ["apiVersion", "operation", "objectId", "size"])
+  );
 }
 
 function isObjectEdge(value: unknown): value is ObjectEdge {
@@ -183,13 +253,14 @@ export function createAutomationService(
 
       if (isCanvasObjectAddRequest(request)) {
         try {
-          const object = {
+          let object = {
             ...createCanvasObject(request.objectType, {
               id: createObjectId(),
               center: request.center,
             }),
             text: request.text?.trim() ?? "",
           } as CanvasObject;
+          if (request.size) object = resizeCanvasObject(object, request.size);
           applyCommand({ type: "object/add", object });
           return {
             ok: true,
@@ -204,6 +275,33 @@ export function createAutomationService(
             error: {
               code: "internal_error",
               message: "Could not add the canvas object",
+            },
+          };
+        }
+      }
+
+      if (isCanvasObjectResizeRequest(request)) {
+        try {
+          const object = getDocument().objects[request.objectId];
+          if (!object || !objectSupportsSize(object.type, request.size)) {
+            return invalidRequest();
+          }
+
+          const resized = resizeCanvasObject(object, request.size);
+          applyCommand({ type: "object/update", object: resized });
+          return {
+            ok: true,
+            apiVersion: AUTOMATION_API_VERSION,
+            operation: "canvas.object.resize",
+            object: resized,
+          };
+        } catch {
+          return {
+            ok: false,
+            apiVersion: AUTOMATION_API_VERSION,
+            error: {
+              code: "internal_error",
+              message: "Could not resize the canvas object",
             },
           };
         }

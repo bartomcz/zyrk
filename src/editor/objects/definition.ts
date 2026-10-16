@@ -39,6 +39,7 @@ export type CanvasObjectDefinition<TObject extends CanvasObject> = {
     minHeight: number;
     keepRatio: boolean;
     textResize?: "reflow-horizontal" | "preserve-font-size";
+    reflowHeight?: (object: TObject, width: number) => number;
     withFrame: (
       object: TObject,
       frame: ObjectFrame,
