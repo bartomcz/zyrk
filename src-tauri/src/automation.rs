@@ -127,15 +127,45 @@ fn automation_endpoint() -> String {
     return format!(r"\\.\pipe\{AUTOMATION_SOCKET_NAME}");
 }
 
-fn bind_listener(endpoint: &str) -> Result<LocalSocketListener, String> {
-    let name = endpoint
-        .to_fs_name::<GenericFilePath>()
-        .map_err(|error| error.to_string())?;
-    let listener = ListenerOptions::new()
+fn create_listener(endpoint: &str) -> Result<LocalSocketListener, std::io::Error> {
+    let name = endpoint.to_fs_name::<GenericFilePath>().map_err(|error| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, error.to_string())
+    })?;
+    ListenerOptions::new()
         .name(name)
         .nonblocking(ListenerNonblockingMode::Both)
         .create_sync()
-        .map_err(|error| error.to_string())?;
+}
+
+fn bind_listener(endpoint: &str) -> Result<LocalSocketListener, String> {
+    let listener = match create_listener(endpoint) {
+        Ok(listener) => listener,
+        #[cfg(unix)]
+        Err(bind_error) if bind_error.kind() == std::io::ErrorKind::AddrInUse => {
+            use std::os::unix::{fs::FileTypeExt, net::UnixStream};
+
+            // shortcut: stale cleanup races simultaneous startup; add a lock if multi-instance startup is supported.
+            match UnixStream::connect(endpoint) {
+                Ok(_) => return Err(bind_error.to_string()),
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound
+                    ) => {}
+                Err(_) => return Err(bind_error.to_string()),
+            }
+
+            match std::fs::symlink_metadata(endpoint) {
+                Ok(metadata) if metadata.file_type().is_socket() => {
+                    std::fs::remove_file(endpoint).map_err(|error| error.to_string())?;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                _ => return Err(bind_error.to_string()),
+            }
+            create_listener(endpoint).map_err(|error| error.to_string())?
+        }
+        Err(error) => return Err(error.to_string()),
+    };
 
     #[cfg(unix)]
     {
@@ -296,9 +326,20 @@ fn respond(connection: &mut LocalSocketStream, body: Value) {
 mod tests {
     use super::*;
 
+    fn test_endpoint() -> String {
+        #[cfg(unix)]
+        return std::env::temp_dir()
+            .join(format!("zyrk-test-{}.sock", Uuid::new_v4()))
+            .to_string_lossy()
+            .into_owned();
+
+        #[cfg(windows)]
+        return format!(r"\\.\pipe\zyrk-test-{}", Uuid::new_v4());
+    }
+
     #[test]
     fn local_transport_round_trips_json() {
-        let endpoint = automation_endpoint();
+        let endpoint = test_endpoint();
         let listener = bind_listener(&endpoint).unwrap();
         let server = thread::spawn(move || {
             let connection = loop {
@@ -349,6 +390,28 @@ mod tests {
             serde_json::from_slice::<Value>(&response).unwrap(),
             json!({ "ok": true, "apiVersion": 1 })
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replaces_a_stale_socket() {
+        use std::os::unix::net::UnixListener;
+
+        let endpoint = test_endpoint();
+        drop(UnixListener::bind(&endpoint).unwrap());
+        assert!(std::path::Path::new(&endpoint).exists());
+
+        drop(bind_listener(&endpoint).unwrap());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_replace_an_active_socket() {
+        let endpoint = test_endpoint();
+        let listener = bind_listener(&endpoint).unwrap();
+
+        assert!(bind_listener(&endpoint).is_err());
+        drop(listener);
     }
 
     #[test]

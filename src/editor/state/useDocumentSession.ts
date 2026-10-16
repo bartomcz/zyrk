@@ -38,8 +38,19 @@ export function useDocumentSession() {
   const document = history.present;
   const activeDocument = useRef(document);
   activeDocument.current = document;
+  const applyCommand = useCallback(
+    (command: DocumentCommand, groupKey?: string) => {
+      dispatch({
+        type: "history/apply",
+        command,
+        occurredAt: now(),
+        groupKey,
+      });
+    },
+    [],
+  );
   const [automationService] = useState(() =>
-    createAutomationService(() => activeDocument.current),
+    createAutomationService(() => activeDocument.current, applyCommand),
   );
 
   useEffect(() => {
@@ -86,18 +97,6 @@ export function useDocumentSession() {
     window.addEventListener("pagehide", flushRecovery);
     return () => window.removeEventListener("pagehide", flushRecovery);
   }, []);
-
-  const applyCommand = useCallback(
-    (command: DocumentCommand, groupKey?: string) => {
-      dispatch({
-        type: "history/apply",
-        command,
-        occurredAt: now(),
-        groupKey,
-      });
-    },
-    [],
-  );
 
   const newDocument = () => {
     const blankDocument = createCanvasDocument();
