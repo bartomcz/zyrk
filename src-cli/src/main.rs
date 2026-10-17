@@ -28,7 +28,7 @@ fn run(args: &[String]) -> Result<(), String> {
         .to_fs_name::<GenericFilePath>()
         .map_err(|error| format!("invalid automation endpoint: {error}"))?;
     let mut connection = LocalSocketStream::connect(name).map_err(|error| {
-        format!("could not connect to Zyrk; is the desktop app running? ({error})")
+        format!("could not connect to Zyrk at {endpoint}; is the desktop app running? ({error})")
     })?;
 
     serde_json::to_writer(&mut connection, &request)
