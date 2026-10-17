@@ -73,6 +73,8 @@ pub fn start_automation(app: AppHandle, state: State<'_, AutomationState>) -> Re
 
     let endpoint = automation_endpoint();
     let listener = bind_listener(&endpoint)?;
+    #[cfg(debug_assertions)]
+    eprintln!("Zyrk automation listening at {endpoint}");
     let running = Arc::new(AtomicBool::new(true));
     let thread_running = Arc::clone(&running);
     let pending = Arc::clone(&state.pending);

@@ -7,7 +7,7 @@ use std::{
 };
 
 const AUTOMATION_SOCKET_NAME: &str = "zyrk.sock";
-const USAGE: &str = "usage:\n  zyrk canvas get\n  zyrk canvas object add text --x <number> --y <number> --text <text>\n  zyrk canvas object add rectangle --x <number> --y <number> [--text <text>]\n  zyrk canvas connection add --from <object-id> --from-edge <edge> --to <object-id> --to-edge <edge>";
+const USAGE: &str = "usage:\n  zyrk canvas get\n  zyrk canvas object add text --x <number> --y <number> --text <text> [--width <number>]\n  zyrk canvas object add rectangle --x <number> --y <number> [--text <text>] [--width <number>] [--height <number>]\n  zyrk canvas object resize <object-id> [--width <number>] [--height <number>]\n  zyrk canvas connection add --from <object-id> --from-edge <edge> --to <object-id> --to-edge <edge>";
 
 fn main() -> ExitCode {
     let args = env::args().skip(1).collect::<Vec<_>>();
@@ -28,7 +28,7 @@ fn run(args: &[String]) -> Result<(), String> {
         .to_fs_name::<GenericFilePath>()
         .map_err(|error| format!("invalid automation endpoint: {error}"))?;
     let mut connection = LocalSocketStream::connect(name).map_err(|error| {
-        format!("could not connect to Zyrk; is the desktop app running? ({error})")
+        format!("could not connect to Zyrk at {endpoint}; is the desktop app running? ({error})")
     })?;
 
     serde_json::to_writer(&mut connection, &request)
@@ -70,6 +70,11 @@ fn build_request(args: &[String]) -> Result<Value, String> {
         {
             build_object_add_request(object_type, options)
         }
+        [canvas, object, resize, object_id, options @ ..]
+            if canvas == "canvas" && object == "object" && resize == "resize" =>
+        {
+            build_object_resize_request(object_id, options)
+        }
         [canvas, connection, add, options @ ..]
             if canvas == "canvas" && connection == "connection" && add == "add" =>
         {
@@ -89,6 +94,8 @@ fn build_object_add_request(object_type: &str, options: &[String]) -> Result<Val
     let mut x = None;
     let mut y = None;
     let mut text = None;
+    let mut width = None;
+    let mut height = None;
     let mut index = 0;
     while index < options.len() {
         let flag = options[index].as_str();
@@ -114,6 +121,18 @@ fn build_object_add_request(object_type: &str, options: &[String]) -> Result<Val
                 }
                 text = Some(value.trim().to_owned());
             }
+            "--width" => {
+                if width.is_some() {
+                    return Err("--width may only be provided once".into());
+                }
+                width = Some(parse_dimension(value, "--width")?);
+            }
+            "--height" => {
+                if height.is_some() {
+                    return Err("--height may only be provided once".into());
+                }
+                height = Some(parse_dimension(value, "--height")?);
+            }
             _ => return Err(format!("unknown option \"{flag}\"")),
         }
         index += 2;
@@ -123,6 +142,9 @@ fn build_object_add_request(object_type: &str, options: &[String]) -> Result<Val
     let y = y.ok_or("missing required option --y")?;
     if object_type == "text" && text.as_deref().unwrap_or_default().is_empty() {
         return Err("text objects require a non-empty --text value".into());
+    }
+    if object_type == "text" && height.is_some() {
+        return Err("text objects do not accept --height; use --width to reflow text".into());
     }
 
     let mut request = serde_json::json!({
@@ -134,7 +156,60 @@ fn build_object_add_request(object_type: &str, options: &[String]) -> Result<Val
     if let Some(text) = text {
         request["text"] = Value::String(text);
     }
+    if width.is_some() || height.is_some() {
+        request["size"] = serde_json::json!({});
+        if let Some(width) = width {
+            request["size"]["width"] = Value::from(width);
+        }
+        if let Some(height) = height {
+            request["size"]["height"] = Value::from(height);
+        }
+    }
     Ok(request)
+}
+
+fn build_object_resize_request(object_id: &str, options: &[String]) -> Result<Value, String> {
+    if object_id.is_empty() {
+        return Err("object id must not be empty".into());
+    }
+
+    let mut width = None;
+    let mut height = None;
+    let mut index = 0;
+    while index < options.len() {
+        let flag = options[index].as_str();
+        let value = options
+            .get(index + 1)
+            .ok_or_else(|| format!("missing value for {flag}"))?;
+        let destination = match flag {
+            "--width" => &mut width,
+            "--height" => &mut height,
+            _ => return Err(format!("unknown option \"{flag}\"")),
+        };
+        if destination.is_some() {
+            return Err(format!("{flag} may only be provided once"));
+        }
+        *destination = Some(parse_dimension(value, flag)?);
+        index += 2;
+    }
+
+    if width.is_none() && height.is_none() {
+        return Err("at least one of --width or --height is required".into());
+    }
+
+    let mut size = serde_json::json!({});
+    if let Some(width) = width {
+        size["width"] = Value::from(width);
+    }
+    if let Some(height) = height {
+        size["height"] = Value::from(height);
+    }
+    Ok(serde_json::json!({
+        "apiVersion": 1,
+        "operation": "canvas.object.resize",
+        "objectId": object_id,
+        "size": size
+    }))
 }
 
 fn build_connection_add_request(options: &[String]) -> Result<Value, String> {
@@ -200,6 +275,14 @@ fn parse_coordinate(value: &str, option: &str) -> Result<f64, String> {
     Ok(number)
 }
 
+fn parse_dimension(value: &str, option: &str) -> Result<f64, String> {
+    let number = parse_coordinate(value, option)?;
+    if number <= 0.0 {
+        return Err(format!("{option} must be greater than zero"));
+    }
+    Ok(number)
+}
+
 fn automation_endpoint() -> String {
     #[cfg(unix)]
     return env::temp_dir()
@@ -252,16 +335,54 @@ mod tests {
                 "--y",
                 "20",
                 "--x",
-                "10"
+                "10",
+                "--width",
+                "240",
+                "--height",
+                "120"
             ]))
             .unwrap(),
             serde_json::json!({
                 "apiVersion": 1,
                 "operation": "canvas.object.add",
                 "objectType": "rectangle",
-                "center": { "x": 10.0, "y": 20.0 }
+                "center": { "x": 10.0, "y": 20.0 },
+                "size": { "width": 240.0, "height": 120.0 }
             })
         );
+    }
+
+    #[test]
+    fn builds_object_resize_requests() {
+        assert_eq!(
+            build_request(&args(&[
+                "canvas",
+                "object",
+                "resize",
+                "object-id",
+                "--height",
+                "120",
+                "--width",
+                "240"
+            ]))
+            .unwrap(),
+            serde_json::json!({
+                "apiVersion": 1,
+                "operation": "canvas.object.resize",
+                "objectId": "object-id",
+                "size": { "width": 240.0, "height": 120.0 }
+            })
+        );
+        assert!(build_request(&args(&["canvas", "object", "resize", "object-id"])).is_err());
+        assert!(build_request(&args(&[
+            "canvas",
+            "object",
+            "resize",
+            "object-id",
+            "--width",
+            "0"
+        ]))
+        .is_err());
     }
 
     #[test]
@@ -341,6 +462,24 @@ mod tests {
         .is_err());
         assert!(build_request(&args(&[
             "canvas", "object", "add", "ellipse", "--x", "10", "--y", "20"
+        ]))
+        .is_err());
+        assert!(build_request(&args(&[
+            "canvas", "object", "add", "text", "--x", "10", "--y", "20", "--text", "Hello",
+            "--height", "40"
+        ]))
+        .is_err());
+        assert!(build_request(&args(&[
+            "canvas",
+            "object",
+            "add",
+            "rectangle",
+            "--x",
+            "10",
+            "--y",
+            "20",
+            "--width",
+            "-1"
         ]))
         .is_err());
     }

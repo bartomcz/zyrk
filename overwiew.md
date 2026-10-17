@@ -151,20 +151,23 @@ contract. `useDocumentSession` owns an instance backed by a getter for the live
 document; MCP and CLI adapters should call this service rather than accessing
 React or Konva state directly.
 
-The API exposes operations to read the canvas and add objects or connections:
+The API exposes operations to read the canvas, size objects, and add connections:
 
 ```json
 { "apiVersion": 1, "operation": "canvas.get" }
-{ "apiVersion": 1, "operation": "canvas.object.add", "objectType": "text", "center": { "x": 100, "y": 200 }, "text": "Hello" }
+{ "apiVersion": 1, "operation": "canvas.object.add", "objectType": "text", "center": { "x": 100, "y": 200 }, "text": "Hello", "size": { "width": 240 } }
+{ "apiVersion": 1, "operation": "canvas.object.resize", "objectId": "uuid", "size": { "width": 240, "height": 120 } }
 { "apiVersion": 1, "operation": "canvas.connection.add", "from": { "objectId": "source", "edge": "right" }, "to": { "objectId": "target", "edge": "left" } }
 ```
 
-`canvas.object.add` supports `text` and `rectangle` and uses editor defaults.
-`canvas.connection.add` requires existing, distinct object IDs and explicit `top`,
-`right`, `bottom`, or `left` edges. Both apply the same history command as an
-in-app edit so undo/redo and recovery remain consistent. Text is required for text
-objects and optional for rectangles. Invalid requests return an `invalid_request`
-error.
+`canvas.object.add` supports `text` and `rectangle`; omitted dimensions use editor
+defaults. `canvas.object.resize` accepts at least one dimension and keeps the object
+center fixed. Text objects accept width only, reflow to an automatic height, and
+preserve their font size. `canvas.connection.add` requires existing, distinct object
+IDs and explicit `top`, `right`, `bottom`, or `left` edges. Mutations apply the same
+history commands as in-app edits so undo/redo and recovery remain consistent. Text
+is required for text objects and optional for rectangles. Invalid requests return an
+`invalid_request` error.
 
 The desktop app starts a local Unix domain socket at
 `<system temp directory>/zyrk.sock`, or a `\\.\pipe\zyrk.sock` named pipe on
