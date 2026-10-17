@@ -22,6 +22,7 @@ npm run tauri dev
 
 - `npm run dev` — browser-only development at http://localhost:1420
 - `npm run build` — type-check and build the frontend
+- `npm run test:e2e` — build the app and CLI, then verify all CLI commands against the desktop app
 - `npm run tauri build` — build the desktop app and installers
 - `cargo check --manifest-path src-tauri/Cargo.toml` — check the Rust backend
 - `cargo build --release --manifest-path src-cli/Cargo.toml` — build the standalone CLI
