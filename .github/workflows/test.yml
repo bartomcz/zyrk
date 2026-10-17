@@ -19,12 +19,12 @@ jobs:
       - name: Install Tauri system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev xvfb at-spi2-core libgl1-mesa-dri libegl-mesa0
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev xvfb at-spi2-core dbus-x11 libgl1-mesa-dri libegl-mesa0
       - run: npm ci
       - run: npm test
       - run: cargo fmt --check
         working-directory: src-tauri
-      - run: xvfb-run --auto-servernum npm run test:e2e
+      - run: dbus-run-session -- xvfb-run --auto-servernum --server-args="-screen 0 1280x800x24" npm run test:e2e
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
           WEBKIT_DISABLE_COMPOSITING_MODE: "1"
