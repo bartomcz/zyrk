@@ -128,11 +128,6 @@ fn save_recovery_snapshot(app: tauri::AppHandle, snapshot: String) -> Result<(),
 pub fn run() {
     tauri::Builder::default()
         .manage(automation::AutomationState::default())
-        .setup(|app| {
-            automation::start_automation(app.handle().clone(), app.state())
-                .map_err(std::io::Error::other)?;
-            Ok(())
-        })
         .invoke_handler(tauri::generate_handler![
             confirm_discard_changes,
             open_document,
