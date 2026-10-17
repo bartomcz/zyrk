@@ -25,3 +25,5 @@ jobs:
       - run: cargo fmt --check
         working-directory: src-tauri
       - run: xvfb-run --auto-servernum npm run test:e2e
+        env:
+          WEBKIT_DISABLE_COMPOSITING_MODE: "1"
