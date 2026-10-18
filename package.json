@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:e2e": "tauri build --debug --no-bundle --config src-tauri/tauri.e2e.conf.json && cargo build --manifest-path src-cli/Cargo.toml",
     "test": "node --test",
+    "test:e2e": "npm run build:e2e && node --test e2e/cli.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },
