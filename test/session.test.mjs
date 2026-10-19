@@ -144,6 +144,28 @@ test("hydration is idempotent across repeated effect setup", async () => {
   assert.equal(f.session.getSnapshot().document.title, "Keep this edit");
 });
 
+test("recovery load failure retains the cached session and permits saving to its path", async (t) => {
+  const cached = recoverySnapshot(createCanvasDocument([], "Cached"), {
+    lastExplicitlySavedRevision: 0,
+  });
+  const f = fixture({ cached });
+  const errors = t.mock.method(console, "error", () => {});
+  const loading = f.session.hydrate();
+  f.hydration.reject(new Error("recovery unavailable"));
+  await loading;
+  assert.equal(errors.mock.callCount(), 1);
+  assert.equal(f.session.getSnapshot().recoveryHydrated, true);
+  assert.equal(f.session.getSnapshot().document.title, "Cached");
+  assert.equal(f.session.getSnapshot().isDirty, false);
+  rename(f.session, "Edited");
+  const saving = f.session.saveDocument();
+  await Promise.resolve();
+  assert.equal(f.saves[0].path, cached.documentPath);
+  f.saves[0].resolve({ saved: true, path: cached.documentPath });
+  await saving;
+  assert.equal(f.session.getSnapshot().isDirty, false);
+});
+
 for (const replacement of ["new", "open", "reopen"]) {
   test(`a pending save cannot update metadata after ${replacement}`, async () => {
     const f = fixture();
@@ -283,6 +305,20 @@ test("only the latest Open request may replace a session, even for identical doc
   f.opens[2].resolve({ document, path: "/stale.json" });
   assert.equal(await stale, false);
   assert.strictEqual(session.getSnapshot(), blank);
+});
+
+test("an older Open cannot replace the session while a newer request is pending or cancelled", async () => {
+  const f = fixture();
+  const session = await f.ready();
+  const before = session.getSnapshot();
+  const older = session.openDocument();
+  const newer = session.openDocument();
+  f.opens[0].resolve({ document: createCanvasDocument(), path: "/older.json" });
+  assert.equal(await older, false);
+  assert.strictEqual(session.getSnapshot(), before);
+  f.opens[1].resolve(null);
+  assert.equal(await newer, false);
+  assert.strictEqual(session.getSnapshot(), before);
 });
 
 test("cancelled and failed Opens leave the current document intact", async () => {

@@ -79,7 +79,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isTauri() || !recoveryHydrated) return;
 
     let cancelled = false;
     let unlisten: (() => void) | undefined;
@@ -111,7 +111,7 @@ export default function App() {
       cancelled = true;
       unlisten?.();
     };
-  }, [automationService]);
+  }, [automationService, recoveryHydrated]);
 
   useEffect(() => {
     if (selectedObjectId && !document.objects[selectedObjectId]) {
