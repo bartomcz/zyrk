@@ -79,7 +79,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (!isTauri()) return;
+    if (!isTauri() || !recoveryHydrated) return;
 
     let cancelled = false;
     let unlisten: (() => void) | undefined;
@@ -111,7 +111,7 @@ export default function App() {
       cancelled = true;
       unlisten?.();
     };
-  }, [automationService]);
+  }, [automationService, recoveryHydrated]);
 
   useEffect(() => {
     if (selectedObjectId && !document.objects[selectedObjectId]) {
@@ -193,15 +193,14 @@ export default function App() {
     selectedObjectId,
   ]);
 
+  const confirmDiscardChanges = async () =>
+    !isDirty ||
+    (isTauri()
+      ? await invoke<boolean>("confirm_discard_changes")
+      : window.confirm("Discard unsaved changes and continue?"));
+
   const newDocument = async () => {
-    if (
-      isDirty &&
-      !(isTauri()
-        ? await invoke<boolean>("confirm_discard_changes")
-        : window.confirm("Discard unsaved changes and create a new document?"))
-    ) {
-      return;
-    }
+    if (!(await confirmDiscardChanges())) return;
 
     replaceWithNewDocument();
     setSelectedObjectId(null);
@@ -326,15 +325,22 @@ export default function App() {
 
   const openDocument = async () => {
     try {
-      if (!(await openDocumentFile())) return;
+      if (!(await confirmDiscardChanges()) || !(await openDocumentFile())) {
+        return;
+      }
 
       setSelectedObjectId(null);
       setSelectedConnectionId(null);
       setEditing(null);
       setPendingObjectType(null);
+      setView({ x: size.width / 2, y: size.height / 2, scale: 1 });
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      window.alert(`Could not open the document: ${message}`);
+      const message = error instanceof Error ? error.message : String(error);
+      if (isTauri()) {
+        await invoke("show_open_document_error", { message });
+      } else {
+        window.alert(`Could not open the document: ${message}`);
+      }
     }
   };
 

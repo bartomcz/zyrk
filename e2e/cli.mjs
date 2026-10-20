@@ -58,7 +58,7 @@ test(
       return JSON.parse(stdout);
     };
 
-    const waitForCanvas = async (predicate = () => true) => {
+    const waitForCanvas = async () => {
       const deadline = Date.now() + 30_000;
       let lastError;
       while (Date.now() < deadline) {
@@ -66,8 +66,7 @@ test(
           throw new Error(`Zyrk exited before becoming ready:\n${appOutput}`);
         }
         try {
-          const response = await runCli("canvas", "get");
-          if (predicate(response.document)) return response;
+          return await runCli("canvas", "get");
         } catch (error) {
           lastError = error;
         }
@@ -103,9 +102,7 @@ test(
         "--width",
         "180",
       );
-      const canvas = await waitForCanvas(
-        (document) => document.objects[text.object.id],
-      );
+      const canvas = await runCli("canvas", "get");
 
       assert.equal(text.ok, true);
       assert.equal(text.object.type, "text");
@@ -132,9 +129,7 @@ test(
         "--text",
         "E2E rectangle",
       );
-      const canvas = await waitForCanvas(
-        (document) => document.objects[rectangle.object.id],
-      );
+      const canvas = await runCli("canvas", "get");
 
       assert.equal(rectangle.ok, true);
       assert.equal(rectangle.object.type, "rectangle");
@@ -159,11 +154,7 @@ test(
         "--height",
         "160",
       );
-      const canvas = await waitForCanvas(
-        (document) =>
-          document.objects[rectangle.object.id]?.width === 300 &&
-          document.objects[rectangle.object.id]?.height === 160,
-      );
+      const canvas = await runCli("canvas", "get");
 
       assert.equal(resized.ok, true);
       assert.equal(resized.object.width, 300);
@@ -191,11 +182,7 @@ test(
         "--to-edge",
         "left",
       );
-      const canvas = await waitForCanvas((document) =>
-        document.connections.some(
-          (connection) => connection.id === added.connection.id,
-        ),
-      );
+      const canvas = await runCli("canvas", "get");
 
       assert.equal(added.ok, true);
       assert.deepEqual(added.connection.from, {

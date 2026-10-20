@@ -35,11 +35,25 @@ async fn confirm_discard_changes() -> bool {
     rfd::AsyncMessageDialog::new()
         .set_level(rfd::MessageLevel::Warning)
         .set_title("Unsaved changes")
-        .set_description("Discard unsaved changes and create a new document?")
-        .set_buttons(rfd::MessageButtons::YesNo)
+        .set_description("Discard unsaved changes and continue?")
+        .set_buttons(rfd::MessageButtons::OkCancelCustom(
+            "Discard".into(),
+            "Cancel".into(),
+        ))
         .show()
         .await
-        == rfd::MessageDialogResult::Yes
+        == rfd::MessageDialogResult::Custom("Discard".into())
+}
+
+#[tauri::command]
+async fn show_open_document_error(message: String) {
+    rfd::AsyncMessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title("Could not open document")
+        .set_description(message)
+        .set_buttons(rfd::MessageButtons::Ok)
+        .show()
+        .await;
 }
 
 #[tauri::command]
@@ -130,6 +144,7 @@ pub fn run() {
         .manage(automation::AutomationState::default())
         .invoke_handler(tauri::generate_handler![
             confirm_discard_changes,
+            show_open_document_error,
             open_document,
             save_document,
             load_recovery_snapshots,

@@ -16,7 +16,7 @@ src/
     ├── model/                      Serializable document types and validation
     ├── objects/                    Object definitions and renderers
     ├── persistence/                JSON files and recovery repositories
-    └── state/                      Commands and undo/redo history
+    └── state/                      Document session, commands, and undo/redo history
 
 src-tauri/
 └── src/lib.rs                      Tauri startup and recovery-file commands
@@ -88,6 +88,32 @@ Viewport and selection changes do not enter document history. Undo and redo
 create a new document revision, which ensures recovery persistence follows
 what is currently visible.
 
+## Document session
+
+`state/documentSession.ts` owns history, the document path, saved revision, and
+recovery readiness independently of React. Commands commit synchronously;
+`useDocumentSession` subscribes to stable snapshots with `useSyncExternalStore`.
+The controller receives the existing file and recovery repositories so lifecycle
+ordering can be tested without a renderer or native dialogs.
+
+Recovery hydration is idempotent. Until it finishes, editor actions reject and
+automation returns a version 1 `internal_error` with a not-ready message. The
+desktop automation listener starts only after hydration. Recovery is persisted
+from committed controller state, not a later React render.
+
+New and successful Open start a new session generation, even when reopening the
+same document ID. Only the latest Open request in the current generation may
+replace the session. Saves capture the requested document snapshot and execute
+in request order: serializing repository calls prevents out-of-order writes to
+the same file. A queued Save uses the current path when it starts (including a
+preceding Save As result); Save As always requests a new path. Cancellation or
+failure leaves saved metadata unchanged and does not block the queue. Edits made
+after the saved snapshot remain dirty.
+
+Replacement drops queued saves from older generations. An already-started save
+may still write its original snapshot to disk, but its completion cannot change
+the replacement session's path or saved revision.
+
 ## Rendering and interaction
 
 `canvas/CanvasStage.tsx` owns pan, pointer-centered zoom, the unbounded grid,
@@ -147,9 +173,10 @@ track the exact working state, including subsequent undo or redo operations.
 ## Automation API
 
 `state/automation.ts` defines the versioned, transport-neutral automation
-contract. `useDocumentSession` owns an instance backed by a getter for the live
-document; MCP and CLI adapters should call this service rather than accessing
-React or Konva state directly.
+contract. The document-session controller owns an instance backed by its current
+committed document; MCP and CLI adapters should call this service rather than
+accessing React or Konva state directly. Acknowledged mutations are immediately
+visible to dependent reads and mutations without waiting for a React render.
 
 The API exposes operations to read the canvas, size objects, and add connections:
 
