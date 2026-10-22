@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { measureTextHeightWithKonva } from "../objects/text/konvaTextMeasurement";
 import { documentFileRepository } from "../persistence/documentRepository";
 import { recoveryRepository } from "../persistence/recoveryRepository";
 import { createDocumentSession } from "./documentSession";
@@ -8,6 +9,7 @@ export function useDocumentSession() {
     createDocumentSession({
       documents: documentFileRepository,
       recovery: recoveryRepository,
+      measureTextHeight: measureTextHeightWithKonva,
     }),
   );
   const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot);

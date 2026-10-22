@@ -6,9 +6,10 @@ import {
   type ObjectEdge,
 } from "../model/objects";
 import { parseCanvasDocumentValue } from "../model/schema";
+import type { TextHeightMeasurer } from "../objects/behavior";
 import {
   createCanvasObject,
-  objectDefinitions,
+  objectBehaviors,
   resizeCanvasObject,
 } from "../objects/registry";
 import type { DocumentCommand } from "./commands";
@@ -123,7 +124,7 @@ function objectSupportsSize(
   objectType: "text" | "rectangle",
   size: AutomationObjectSize,
 ): boolean {
-  const transform = objectDefinitions[objectType].transform;
+  const transform = objectBehaviors[objectType].transform;
   return (
     (size.width === undefined || size.width >= transform.minWidth) &&
     (size.height === undefined ||
@@ -227,6 +228,7 @@ function invalidRequest(): AutomationResponse {
 export function createAutomationService(
   getDocument: () => CanvasDocument,
   applyCommand: (command: DocumentCommand) => void,
+  measureTextHeight: TextHeightMeasurer,
 ): AutomationService {
   return {
     execute(request) {
@@ -260,7 +262,13 @@ export function createAutomationService(
             }),
             text: request.text?.trim() ?? "",
           } as CanvasObject;
-          if (request.size) object = resizeCanvasObject(object, request.size);
+          if (request.size) {
+            object = resizeCanvasObject(
+              object,
+              request.size,
+              measureTextHeight,
+            );
+          }
           applyCommand({ type: "object/add", object });
           return {
             ok: true,
@@ -287,7 +295,11 @@ export function createAutomationService(
             return invalidRequest();
           }
 
-          const resized = resizeCanvasObject(object, request.size);
+          const resized = resizeCanvasObject(
+            object,
+            request.size,
+            measureTextHeight,
+          );
           applyCommand({ type: "object/update", object: resized });
           return {
             ok: true,

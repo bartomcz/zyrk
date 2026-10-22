@@ -4,64 +4,54 @@ import type {
   CanvasObjectType,
 } from "../model/objects";
 import type {
-  CanvasObjectDefinition,
-  CanvasObjectDefinitionRegistry,
+  CanvasObjectBehavior,
+  CanvasObjectBehaviorRegistry,
   CreateObjectContext,
-} from "./definition";
-import { rectangleObjectDefinition } from "./rectangle/RectangleObject";
-import { textObjectDefinition } from "./text/TextObject";
+  TextHeightMeasurer,
+} from "./behavior";
+import { frameFromCenter, getFrameCenter } from "./geometry";
+import { rectangleObjectBehavior } from "./rectangle/behavior";
+import { textObjectBehavior } from "./text/behavior";
 
-export const objectDefinitions = {
-  text: textObjectDefinition,
-  rectangle: rectangleObjectDefinition,
-} satisfies CanvasObjectDefinitionRegistry;
+export const objectBehaviors = {
+  text: textObjectBehavior,
+  rectangle: rectangleObjectBehavior,
+} satisfies CanvasObjectBehaviorRegistry;
 
-export function getObjectDefinition<TObject extends CanvasObject>(
+export function getObjectBehavior<TObject extends CanvasObject>(
   object: TObject,
-): CanvasObjectDefinition<TObject> {
-  // The registry is exhaustive by object type. TypeScript cannot retain the
-  // correlation between a generic object's discriminator and the mapped value.
-  return objectDefinitions[object.type] as unknown as CanvasObjectDefinition<
-    TObject
-  >;
+): CanvasObjectBehavior<TObject> {
+  // TypeScript cannot retain the discriminator-to-registry correlation here.
+  return objectBehaviors[
+    object.type
+  ] as unknown as CanvasObjectBehavior<TObject>;
 }
 
 export function createCanvasObject<TType extends CanvasObjectType>(
   type: TType,
   context: CreateObjectContext,
 ): CanvasObjectByType[TType] {
-  const definition = objectDefinitions[type] as unknown as CanvasObjectDefinition<
+  const behavior = objectBehaviors[type] as unknown as CanvasObjectBehavior<
     CanvasObjectByType[TType]
   >;
-  return definition.create(context);
+  return behavior.create(context);
 }
 
 export function resizeCanvasObject<TObject extends CanvasObject>(
   object: TObject,
   size: { width?: number; height?: number },
+  measureTextHeight: TextHeightMeasurer,
 ): TObject {
-  const definition = getObjectDefinition(object);
-  const angle = (object.rotation * Math.PI) / 180;
-  const cos = Math.cos(angle);
-  const sin = Math.sin(angle);
-  const center = {
-    x: object.x + (object.width / 2) * cos - (object.height / 2) * sin,
-    y: object.y + (object.width / 2) * sin + (object.height / 2) * cos,
-  };
+  const behavior = getObjectBehavior(object);
+  const center = getFrameCenter(object);
   const width = size.width ?? object.width;
-  const height = definition.transform.reflowHeight
-    ? definition.transform.reflowHeight(object, width)
+  const height = behavior.transform.reflowHeight
+    ? behavior.transform.reflowHeight(object, width, measureTextHeight)
     : (size.height ?? object.height);
-  const resized = definition.transform.withFrame(
+  const resized = behavior.transform.withFrame(
     object,
-    {
-      x: center.x - (width / 2) * cos + (height / 2) * sin,
-      y: center.y - (width / 2) * sin - (height / 2) * cos,
-      width,
-      height,
-      rotation: object.rotation,
-    },
-    definition.transform.reflowHeight ? "reflow" : "scale",
+    frameFromCenter(center, { width, height }, object.rotation),
+    behavior.transform.reflowHeight ? "reflow" : "scale",
   );
 
   return (resized.type === "text" && size.width !== undefined

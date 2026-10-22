@@ -15,7 +15,7 @@ import {
 } from "./editor/model/objects";
 import {
   createCanvasObject,
-  getObjectDefinition,
+  getObjectBehavior,
 } from "./editor/objects/registry";
 import { useDocumentSession } from "./editor/state/useDocumentSession";
 
@@ -255,7 +255,7 @@ export default function App() {
 
   const beginEditing = (objectId: ObjectId) => {
     const object = document.objects[objectId];
-    if (!object || !getObjectDefinition(object).textEditor) return;
+    if (!object || !getObjectBehavior(object).textEditor) return;
 
     setSelectedObjectId(objectId);
     setSelectedConnectionId(null);
@@ -274,8 +274,8 @@ export default function App() {
     if (!editing) return;
     const object = document.objects[editing.objectId];
     if (!object) return;
-    const definition = getObjectDefinition(object);
-    const textEditor = definition.textEditor;
+    const behavior = getObjectBehavior(object);
+    const textEditor = behavior.textEditor;
     if (!textEditor) return;
 
     applyCommand(
@@ -296,7 +296,7 @@ export default function App() {
     if (!editing) return;
     const object = document.objects[editing.objectId];
     if (object) {
-      const textEditor = getObjectDefinition(object).textEditor;
+      const textEditor = getObjectBehavior(object).textEditor;
       if (textEditor) {
         const finishedObject = textEditor.finish(object);
         if (!finishedObject && editing.isNew) {

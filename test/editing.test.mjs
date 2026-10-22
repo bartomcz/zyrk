@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "vite";
 
-test("object definitions own editing and resize behavior", async () => {
+test("object behaviors own editing and resize policies", async () => {
   const vite = await createServer({ appType: "custom", logLevel: "silent" });
 
   try {
-    const { createCanvasObject, getObjectDefinition } =
+    const { createCanvasObject, getObjectBehavior } =
       await vite.ssrLoadModule("/src/editor/objects/registry.ts");
     const center = { x: 0, y: 0 };
 
     const text = createCanvasObject("text", { id: "text", center });
-    const textDefinition = getObjectDefinition(text);
+    const textDefinition = getObjectBehavior(text);
     assert.equal(text.text, "");
     assert.equal(text.autoWidth, true);
     assert.equal(text.width, 40);
@@ -86,6 +86,10 @@ test("object definitions own editing and resize behavior", async () => {
     assert.equal(editedResizedText.x, manualText.x);
     assert.equal(textDefinition.transform.textResize, "reflow-horizontal");
     assert.equal(
+      textDefinition.transform.reflowHeight(text, 80, () => 1),
+      24,
+    );
+    assert.equal(
       textDefinition.textEditor.finish({ ...updatedText, text: "   " }),
       null,
     );
@@ -94,7 +98,7 @@ test("object definitions own editing and resize behavior", async () => {
       id: "rectangle",
       center,
     });
-    const rectangleDefinition = getObjectDefinition(rectangle);
+    const rectangleDefinition = getObjectBehavior(rectangle);
     const updatedRectangle = rectangleDefinition.textEditor.update(
       rectangle,
       "  Label  ",

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { CanvasObject } from "../model/objects";
-import { getObjectDefinition } from "../objects/registry";
+import { getObjectPresentation } from "../objects/presentation";
+import { getObjectBehavior } from "../objects/registry";
 import type { CanvasView } from "./CanvasStage";
 
 type EditorOverlayProps = {
@@ -23,8 +24,9 @@ export function EditorOverlay({
   onCancel,
 }: EditorOverlayProps) {
   const editorRef = useRef<HTMLTextAreaElement>(null);
-  const definition = getObjectDefinition(object);
-  const textEditor = definition.textEditor;
+  const behavior = getObjectBehavior(object);
+  const presentation = getObjectPresentation(object);
+  const textEditor = behavior.textEditor;
 
   useEffect(() => {
     editorRef.current?.focus();
@@ -45,7 +47,7 @@ export function EditorOverlay({
       width: object.width,
       height: object.height,
       transform: `scale(${view.scale}) rotate(${object.rotation}deg)`,
-      ...textEditor.getStyle(object),
+      ...presentation.textEditor?.getStyle(object),
     },
     onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => {
       const editor = event.currentTarget;

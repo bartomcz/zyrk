@@ -6,6 +6,8 @@ let vite;
 let createDocumentSession;
 let createCanvasDocument;
 
+const measureTextHeight = () => 28;
+
 before(async () => {
   vite = await createServer({ appType: "custom", logLevel: "silent" });
   ({ createDocumentSession } = await vite.ssrLoadModule(
@@ -59,6 +61,7 @@ function fixture({ cached = null, loaded = cached } = {}) {
       load: () => { loads += 1; return hydration.promise; },
       save: async (snapshot) => { recoveries.push(snapshot); return true; },
     },
+    measureTextHeight,
   });
   return {
     session, hydration, saves, opens, recoveries,

@@ -2,6 +2,10 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createServer } from "vite";
 
+function measureTextHeight({ text, width, fontSize }) {
+  return Math.ceil((text.length * fontSize * 0.5) / width) * fontSize;
+}
+
 function objectCenter(object) {
   const angle = (object.rotation * Math.PI) / 180;
   return {
@@ -27,7 +31,11 @@ test("canvas.get returns a validated snapshot of the active document", async () 
       "/src/editor/state/automation.ts",
     );
     let activeDocument = createCanvasDocument([], "First");
-    const service = createAutomationService(() => activeDocument, () => {});
+    const service = createAutomationService(
+      () => activeDocument,
+      () => {},
+      measureTextHeight,
+    );
 
     const first = service.execute({
       apiVersion: 1,
@@ -105,6 +113,7 @@ test("canvas.object.add uses editor defaults and document history", async () => 
           occurredAt: "2025-01-01T00:00:00.000Z",
         });
       },
+      measureTextHeight,
     );
 
     const response = service.execute({
@@ -209,6 +218,7 @@ test("canvas.object.resize preserves centers and reflows text through history", 
           occurredAt: "2025-01-01T00:00:00.000Z",
         });
       },
+      measureTextHeight,
     );
 
     const resizedRectangle = service.execute({
@@ -224,43 +234,19 @@ test("canvas.object.resize preserves centers and reflows text through history", 
     assert.ok(Math.abs(objectCenter(resizedRectangle.object).y - 200) < 1e-9);
     assert.equal(history.past.length, 1);
 
-    const previousDocument = globalThis.document;
-    const pixels = new Uint8ClampedArray(400);
-    for (let index = 0; index < 100; index += 1) {
-      pixels[index * 4] = 40;
-      pixels[index * 4 + 1] = 40;
-      pixels[index * 4 + 2] = 40;
-      pixels[index * 4 + 3] = 255;
-    }
-    globalThis.document = {
-      createElement: () => ({
-        style: {},
-        getContext: () => ({
-          clearRect() {},
-          fillRect() {},
-          save() {},
-          restore() {},
-          getImageData: () => ({ data: pixels }),
-          measureText: (value) => ({
-            width: value.length * 10,
-            actualBoundingBoxAscent: 8,
-            actualBoundingBoxDescent: 2,
-          }),
-        }),
-      }),
-    };
     const resizedText = service.execute({
       apiVersion: 1,
       operation: "canvas.object.resize",
       objectId: "text",
       size: { width: 80 },
     });
-    if (previousDocument === undefined) delete globalThis.document;
-    else globalThis.document = previousDocument;
 
     assert.equal(resizedText.ok, true);
     assert.equal(resizedText.object.width, 80);
-    assert.ok(resizedText.object.height > text.height);
+    assert.equal(
+      resizedText.object.height,
+      measureTextHeight({ ...text, width: 80 }),
+    );
     assert.equal(resizedText.object.fontSize, text.fontSize);
     assert.equal(resizedText.object.autoWidth, false);
     assert.equal(resizedText.object.x + resizedText.object.width / 2, -50);
@@ -328,6 +314,7 @@ test("canvas.connection.add connects existing objects through history", async ()
           occurredAt: "2025-01-01T00:00:00.000Z",
         });
       },
+      measureTextHeight,
     );
 
     const response = service.execute({

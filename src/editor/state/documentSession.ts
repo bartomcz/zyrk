@@ -1,4 +1,5 @@
 import { createCanvasDocument, type CanvasDocument } from "../model/document";
+import type { TextHeightMeasurer } from "../objects/behavior";
 import type { documentFileRepository } from "../persistence/documentRepository";
 import type {
   recoveryRepository,
@@ -23,9 +24,11 @@ function now(): string {
 export function createDocumentSession({
   documents,
   recovery,
+  measureTextHeight,
 }: {
   documents: typeof documentFileRepository;
   recovery: typeof recoveryRepository;
+  measureTextHeight: TextHeightMeasurer;
 }) {
   const initialRecovery = recovery.loadCached();
   let history = createDocumentHistory(
@@ -101,6 +104,7 @@ export function createDocumentSession({
   const automation = createAutomationService(
     () => history.present,
     applyCommand,
+    measureTextHeight,
   );
   const automationService: AutomationService = {
     execute: (request) =>
