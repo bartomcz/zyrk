@@ -2,12 +2,9 @@ import { Rect, Text } from "react-konva";
 import type { RectangleObject } from "../../model/objects";
 import {
   EDITABLE_TEXT_NODE_NAME,
-  type CanvasObjectDefinition,
+  type CanvasObjectPresentation,
   type ObjectRendererProps,
 } from "../definition";
-
-const DEFAULT_WIDTH = 180;
-const DEFAULT_HEIGHT = 120;
 
 function RectangleObjectRenderer({
   object,
@@ -39,40 +36,10 @@ function RectangleObjectRenderer({
   );
 }
 
-export const rectangleObjectDefinition: CanvasObjectDefinition<RectangleObject> =
+export const rectangleObjectPresentation: CanvasObjectPresentation<RectangleObject> =
   {
-    create: ({ id, center }) => ({
-      id,
-      type: "rectangle",
-      x: center.x - DEFAULT_WIDTH / 2,
-      y: center.y - DEFAULT_HEIGHT / 2,
-      width: DEFAULT_WIDTH,
-      height: DEFAULT_HEIGHT,
-      rotation: 0,
-      color: "#171717",
-      strokeWidth: 2,
-      text: "",
-      fontSize: 28,
-      fontFamily: "sans-serif",
-      textColor: "#171717",
-      textAlign: "center",
-    }),
     Renderer: RectangleObjectRenderer,
-    transform: {
-      minWidth: 20,
-      minHeight: 20,
-      keepRatio: false,
-      textResize: "preserve-font-size",
-      withFrame: (object, frame) => ({ ...object, ...frame }),
-    },
     textEditor: {
-      getValue: (object) => object.text,
-      update: (object, value) =>
-        value === object.text ? object : { ...object, text: value },
-      finish: (object) => {
-        const text = object.text.trim();
-        return text === object.text ? object : { ...object, text };
-      },
       getStyle: (object) => ({
         color: object.textColor,
         fontFamily: object.fontFamily,

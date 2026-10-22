@@ -1,16 +1,10 @@
-import Konva from "konva";
 import { Text } from "react-konva";
 import type { TextObject } from "../../model/objects";
 import {
   EDITABLE_TEXT_NODE_NAME,
-  type CanvasObjectDefinition,
+  type CanvasObjectPresentation,
   type ObjectRendererProps,
 } from "../definition";
-
-export const DEFAULT_TEXT_FONT_SIZE = 28;
-export const DEFAULT_TEXT_HEIGHT = DEFAULT_TEXT_FONT_SIZE;
-const MIN_TEXT_WIDTH = 40;
-const MIN_TEXT_HEIGHT = 24;
 
 function TextObjectRenderer({
   object,
@@ -33,80 +27,9 @@ function TextObjectRenderer({
   );
 }
 
-export const textObjectDefinition: CanvasObjectDefinition<TextObject> = {
-  create: ({ id, center }) => ({
-    id,
-    type: "text",
-    text: "",
-    autoWidth: true,
-    x: center.x - MIN_TEXT_WIDTH / 2,
-    y: center.y - DEFAULT_TEXT_HEIGHT / 2,
-    width: MIN_TEXT_WIDTH,
-    height: DEFAULT_TEXT_HEIGHT,
-    rotation: 0,
-    fontSize: DEFAULT_TEXT_FONT_SIZE,
-    fontFamily: "sans-serif",
-    textColor: "#171717",
-    textAlign: "center",
-  }),
+export const textObjectPresentation: CanvasObjectPresentation<TextObject> = {
   Renderer: TextObjectRenderer,
-  transform: {
-    minWidth: MIN_TEXT_WIDTH,
-    minHeight: MIN_TEXT_HEIGHT,
-    keepRatio: true,
-    textResize: "reflow-horizontal",
-    reflowHeight: (object, width) => {
-      const text = new Konva.Text({
-        text: object.text,
-        width,
-        wrap: "word",
-        fontSize: object.fontSize,
-        fontFamily: object.fontFamily,
-      });
-      const height = Math.max(MIN_TEXT_HEIGHT, text.height());
-      text.destroy();
-      return height;
-    },
-    withFrame: (object, frame, resizeMode) => ({
-      ...object,
-      ...frame,
-      autoWidth: object.autoWidth && frame.width === object.width,
-      fontSize:
-        resizeMode === "reflow"
-          ? object.fontSize
-          : object.fontSize * (frame.height / object.height),
-    }),
-  },
   textEditor: {
-    getValue: (object) => object.text,
-    update: (object, value, contentWidth, contentHeight) => {
-      const width = object.autoWidth
-        ? Math.max(MIN_TEXT_WIDTH, contentWidth)
-        : object.width;
-      const height =
-        !object.autoWidth && contentWidth <= object.width
-          ? Math.max(
-              MIN_TEXT_HEIGHT,
-              object.fontSize * value.split("\n").length,
-            )
-          : Math.max(MIN_TEXT_HEIGHT, object.fontSize, contentHeight);
-      return value === object.text &&
-        width === object.width &&
-        height === object.height
-        ? object
-        : {
-            ...object,
-            text: value,
-            x: object.x + (object.width - width) / 2,
-            width,
-            height,
-          };
-    },
-    finish: (object) => {
-      const text = object.text.trim();
-      if (!text) return null;
-      return text === object.text ? object : { ...object, text };
-    },
     getStyle: (object) => ({
       color: object.textColor,
       fontFamily: object.fontFamily,

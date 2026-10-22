@@ -7,7 +7,8 @@ import type {
   ObjectFrame,
   ObjectId,
 } from "../model/objects";
-import { getObjectDefinition } from "../objects/registry";
+import { getObjectPresentation } from "../objects/presentation";
+import { getObjectBehavior } from "../objects/registry";
 import { getEdgePoint, OBJECT_EDGES } from "./connections";
 import { useObjectTransform } from "./useObjectTransform";
 
@@ -44,8 +45,9 @@ export function CanvasObjectNode({
   onPreviewFrame,
   onChange,
 }: CanvasObjectNodeProps) {
-  const definition = getObjectDefinition(object);
-  const Renderer = definition.Renderer;
+  const behavior = getObjectBehavior(object);
+  const presentation = getObjectPresentation(object);
+  const Renderer = presentation.Renderer;
   const objectRef = useRef<Konva.Group>(null);
   const {
     transformerRef,
@@ -55,7 +57,7 @@ export function CanvasObjectNode({
   } = useObjectTransform({
     object,
     objectRef,
-    definition,
+    behavior,
     selected,
     editing,
     onPreviewFrame,
@@ -63,7 +65,7 @@ export function CanvasObjectNode({
   });
 
   const updateFrame = (frame: ObjectFrame) => {
-    onChange(definition.transform.withFrame(object, frame));
+    onChange(behavior.transform.withFrame(object, frame));
   };
 
   const displayedObject: CanvasObject = liveFrame
@@ -85,10 +87,10 @@ export function CanvasObjectNode({
         }}
         onTap={() => onSelect(object.id)}
         onDblClick={() => {
-          if (definition.textEditor) onBeginEditing(object.id);
+          if (behavior.textEditor) onBeginEditing(object.id);
         }}
         onDblTap={() => {
-          if (definition.textEditor) onBeginEditing(object.id);
+          if (behavior.textEditor) onBeginEditing(object.id);
         }}
         onDragStart={(event) => {
           onSelect(object.id);
@@ -133,7 +135,7 @@ export function CanvasObjectNode({
           <Transformer
             ref={transformerRef}
             rotateEnabled={false}
-            keepRatio={definition.transform.keepRatio}
+            keepRatio={behavior.transform.keepRatio}
             enabledAnchors={[
               "top-left",
               "top-right",

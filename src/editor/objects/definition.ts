@@ -3,54 +3,24 @@ import type {
   CanvasObject,
   CanvasObjectByType,
   CanvasObjectType,
-  ObjectFrame,
-  ObjectId,
 } from "../model/objects";
 
 export const EDITABLE_TEXT_NODE_NAME = "editable-text";
-
-export type CreateObjectContext = {
-  id: ObjectId;
-  center: { x: number; y: number };
-};
 
 export type ObjectRendererProps<TObject extends CanvasObject> = {
   object: TObject;
   editing: boolean;
 };
 
-export type TextEditorBehavior<TObject extends CanvasObject> = {
-  getValue: (object: TObject) => string;
-  update: (
-    object: TObject,
-    value: string,
-    contentWidth: number,
-    contentHeight: number,
-  ) => TObject;
-  finish: (object: TObject) => TObject | null;
-  getStyle: (object: TObject) => CSSProperties;
-};
-
-export type CanvasObjectDefinition<TObject extends CanvasObject> = {
-  create: (context: CreateObjectContext) => TObject;
+export type CanvasObjectPresentation<TObject extends CanvasObject> = {
   Renderer: ComponentType<ObjectRendererProps<TObject>>;
-  transform: {
-    minWidth: number;
-    minHeight: number;
-    keepRatio: boolean;
-    textResize?: "reflow-horizontal" | "preserve-font-size";
-    reflowHeight?: (object: TObject, width: number) => number;
-    withFrame: (
-      object: TObject,
-      frame: ObjectFrame,
-      resizeMode?: "scale" | "reflow",
-    ) => TObject;
+  textEditor?: {
+    getStyle: (object: TObject) => CSSProperties;
   };
-  textEditor?: TextEditorBehavior<TObject>;
 };
 
-export type CanvasObjectDefinitionRegistry = {
-  [TType in CanvasObjectType]: CanvasObjectDefinition<
+export type CanvasObjectPresentationRegistry = {
+  [TType in CanvasObjectType]: CanvasObjectPresentation<
     CanvasObjectByType[TType]
   >;
 };

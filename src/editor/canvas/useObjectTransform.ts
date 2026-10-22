@@ -5,15 +5,13 @@ import type {
   ObjectFrame,
   ObjectId,
 } from "../model/objects";
-import {
-  EDITABLE_TEXT_NODE_NAME,
-  type CanvasObjectDefinition,
-} from "../objects/definition";
+import type { CanvasObjectBehavior } from "../objects/behavior";
+import { EDITABLE_TEXT_NODE_NAME } from "../objects/definition";
 
 type UseObjectTransformOptions<TObject extends CanvasObject> = {
   object: TObject;
   objectRef: RefObject<Konva.Group | null>;
-  definition: CanvasObjectDefinition<TObject>;
+  behavior: CanvasObjectBehavior<TObject>;
   selected: boolean;
   editing: boolean;
   onPreviewFrame: (id: ObjectId, frame: ObjectFrame | null) => void;
@@ -23,7 +21,7 @@ type UseObjectTransformOptions<TObject extends CanvasObject> = {
 export function useObjectTransform<TObject extends CanvasObject>({
   object,
   objectRef,
-  definition,
+  behavior,
   selected,
   editing,
   onPreviewFrame,
@@ -47,13 +45,13 @@ export function useObjectTransform<TObject extends CanvasObject>({
     width: horizontalResizeRef.current
       ? (resizedWidthRef.current ?? object.width)
       : Math.max(
-          definition.transform.minWidth,
+          behavior.transform.minWidth,
           object.width * Math.abs(node.scaleX()),
         ),
     height: horizontalResizeRef.current
       ? (resizedHeightRef.current ?? object.height)
       : Math.max(
-          definition.transform.minHeight,
+          behavior.transform.minHeight,
           object.height * Math.abs(node.scaleY()),
         ),
     rotation: node.rotation(),
@@ -63,7 +61,7 @@ export function useObjectTransform<TObject extends CanvasObject>({
     const anchor = transformerRef.current?.getActiveAnchor();
     horizontalResizeRef.current =
       (anchor === "middle-left" || anchor === "middle-right") &&
-      definition.transform.textResize === "reflow-horizontal";
+      behavior.transform.textResize === "reflow-horizontal";
     resizedWidthRef.current = null;
     resizedHeightRef.current = null;
   };
@@ -75,13 +73,13 @@ export function useObjectTransform<TObject extends CanvasObject>({
 
     if (text && horizontalResizeRef.current) {
       const width = Math.max(
-        definition.transform.minWidth,
+        behavior.transform.minWidth,
         text.width() * Math.abs(node.scaleX()),
       );
       text.width(width);
       text.wrap("word");
       text.height("auto");
-      const height = Math.max(definition.transform.minHeight, text.height());
+      const height = Math.max(behavior.transform.minHeight, text.height());
       text.height(height);
       node.scaleX(1);
       resizedWidthRef.current = width;
@@ -89,7 +87,7 @@ export function useObjectTransform<TObject extends CanvasObject>({
       transformerRef.current?.forceUpdate();
     } else if (
       text &&
-      definition.transform.textResize === "preserve-font-size"
+      behavior.transform.textResize === "preserve-font-size"
     ) {
       const scaleX = Math.abs(node.scaleX());
       const scaleY = Math.abs(node.scaleY());
@@ -111,7 +109,7 @@ export function useObjectTransform<TObject extends CanvasObject>({
 
     node.scaleX(1);
     node.scaleY(1);
-    if (definition.transform.textResize === "preserve-font-size") {
+    if (behavior.transform.textResize === "preserve-font-size") {
       node
         .findOne<Konva.Text>(`.${EDITABLE_TEXT_NODE_NAME}`)
         ?.scale({ x: 1, y: 1 });
@@ -120,7 +118,7 @@ export function useObjectTransform<TObject extends CanvasObject>({
     resizedWidthRef.current = null;
     resizedHeightRef.current = null;
     onPreviewFrame(object.id, null);
-    onChange(definition.transform.withFrame(object, frame, resizeMode));
+    onChange(behavior.transform.withFrame(object, frame, resizeMode));
   };
 
   return {
